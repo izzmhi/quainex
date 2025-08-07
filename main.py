@@ -48,10 +48,18 @@ app = FastAPI()
 # IMPORTANT: Update this list with your actual frontend domains for production
 # For local development, you might use ["http://localhost:3000"] or similar.
 # For Render deployment, replace with your actual frontend URL(s), e.g., ["https://your-quainex-app-frontend.onrender.com"]
-production_origins = [
-    "https://quainex.onrender.com", # Your backend's default local address
-    "https://quainex.onrender.com"  # Your frontend's current local address
-] 
+origins = [
+    "http://127.0.0.1:5500",      # <-- Add your local frontend URL here
+    "https://quainex.onrender.com"  # Your deployed backend URL
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 # Add your production frontend URL(s) here when you deploy to Render:
 # Example: production_origins.append("https://your-quainex-app-frontend.onrender.com")
 
