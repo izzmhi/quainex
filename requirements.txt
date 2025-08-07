@@ -1,0 +1,12 @@
+fastapi
+uvicorn
+sqlalchemy
+passlib[bcrypt]
+python-jose
+python-dotenv
+httpx
+elevenlabs
+groq
+pydantic
+psycopg2-binary
+
