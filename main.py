@@ -282,7 +282,7 @@ def login_with_cookie(form: OAuth2PasswordRequestForm = Depends(), db: Session =
         value=access_token,
         httponly=True,
         samesite="Strict",
-        secure=True,
+        secure=False,
     )
     return response
 
