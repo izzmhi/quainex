@@ -63,13 +63,6 @@ app.add_middleware(
 # Add your production frontend URL(s) here when you deploy to Render:
 # Example: production_origins.append("https://your-quainex-app-frontend.onrender.com")
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=production_origins,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
 # ---------- Database Setup ---------- #
 # Use DATABASE_URL for Render (PostgreSQL) and fallback to SQLite for local development
