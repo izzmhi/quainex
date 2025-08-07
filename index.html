@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Quainex AI</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      body {
+        font-family: 'Inter', sans-serif;
+      }
+      /* Custom scrollbar for chatbox */
+      #chat-box::-webkit-scrollbar {
+        width: 8px;
+      }
+      #chat-box::-webkit-scrollbar-track {
+        background: #2d3748; /* gray-800 */
+        border-radius: 10px;
+      }
+      #chat-box::-webkit-scrollbar-thumb {
+        background: #4a5568; /* gray-700 */
+        border-radius: 10px;
+      }
+      #chat-box::-webkit-scrollbar-thumb:hover {
+        background: #a0aec0; /* gray-500 */
+      }
+    </style>
+  </head>
+  <body class="bg-gray-900 text-white h-screen flex flex-col">
+    <!-- Header -->
+    <header class="flex justify-between items-center p-4 bg-gray-800 shadow-md">
+      <div class="flex items-center">
+        <!-- Mobile menu button -->
+        <button id="mobile-menu-btn" class="md:hidden text-white mr-4 focus:outline-none">
+          <i class="fas fa-bars text-xl"></i>
+        </button>
+        <div class="text-xl font-semibold text-green-400">Quainex AI</div>
+      </div>
+      <div class="flex items-center space-x-4">
+        <select id="provider-select" class="bg-gray-700 text-white rounded p-1 text-sm">
+          <option value="openrouter">V PLUS</option>
+          <option value="together">IZZMHI</option>
+          <option value="groq">BST</option>
+        </select>
+        <button id="logout-btn" class="bg-red-500 hover:bg-red-600 text-sm px-3 py-1 rounded hidden">Logout</button>
+        <!-- User avatar - updated to use currentUser from app.js -->
+        <img id="user-avatar" src="https://ui-avatars.com/api/?name=U" class="h-8 w-8 rounded-full" />
+      </div>
+    </header>
+
+    <!-- Body layout -->
+    <main class="flex flex-1 overflow-hidden">
+      <!-- Sidebar - hidden by default on small screens, block on medium and up -->
+      <aside class="hidden md:block w-64 bg-gray-800 p-4 space-y-4 overflow-y-auto">
+        <button class="w-full bg-green-500 hover:bg-green-600 rounded px-4 py-2">+ New Chat</button>
+        <div id="chat-history" class="space-y-2">
+          <!-- Chat history items will load here -->
+        </div>
+        <div class="border-t border-gray-700 pt-4">
+          <div class="text-sm text-gray-400">Tools</div>
+          <ul class="space-y-2 mt-2">
+            <li><button class="tool-btn w-full text-left p-2 rounded hover:bg-gray-700" data-tool="chat">Chat</button></li>
+            <li><button class="tool-btn w-full text-left p-2 rounded hover:bg-gray-700" data-tool="summarize">Summarize</button></li>
+            <li><button class="tool-btn w-full text-left p-2 rounded hover:bg-gray-700" data-tool="translate">Translate</button></li>
+            <li><button class="tool-btn w-full text-left p-2 rounded hover:bg-gray-700" data-tool="analyze">Analyze</button></li>
+            <li><button class="tool-btn w-full text-left p-2 rounded hover:bg-gray-700" data-tool="search">Search</button></li>
+            <li><button id="tts-btn" class="w-full text-left p-2 rounded hover:bg-gray-700">Text-to-Speech</button></li>
+            <li><button id="img-gen-btn" class="w-full text-left p-2 rounded hover:bg-gray-700">Image Generation</button></li>
+          </ul>
+        </div>
+      </aside>
+
+      <!-- Chat Area - takes full width on small screens, adjusts on medium and up -->
+      <section id="chat-screen" class="flex-1 flex flex-col w-full">
+        <div class="flex-1 overflow-y-auto p-6 space-y-4 bg-gray-900">
+          <div id="chat-box" class="space-y-4"></div>
+        </div>
+
+        <!-- Chat Input -->
+        <form id="chat-form" class="bg-gray-800 p-4 flex gap-2 items-center">
+          <input id="user-input" type="text" placeholder="Message Quainex..." class="flex-1 bg-gray-700 text-white px-4 py-2 rounded focus:outline-none" />
+          <input type="file" id="file-input" class="hidden" accept=".txt,.pdf,.doc,.docx" />
+          <button type="button" onclick="document.getElementById('file-input').click()" class="p-2 rounded hover:bg-gray-700"><i class="fas fa-paperclip text-white"></i></button>
+          <button type="button" id="voice-btn" class="p-2 rounded hover:bg-gray-700"><i class="fas fa-microphone text-white"></i></button>
+          <button type="submit" class="bg-green-500 hover:bg-green-600 px-4 py-2 rounded">Send</button>
+        </form>
+      </section>
+    </main>
+
+    <!-- Login Screen -->
+    <div id="login-screen" class="fixed inset-0 bg-gray-900 flex items-center justify-center z-50">
+      <form id="login-form" class="bg-gray-800 p-6 rounded-lg shadow-lg w-full max-w-sm space-y-4">
+        <h2 class="text-xl font-semibold text-center text-green-400">Welcome to Quainex</h2>
+        <input id="username" type="text" placeholder="Username" class="w-full px-4 py-2 rounded bg-gray-700 text-white" required />
+        <input id="password" type="password" placeholder="Password" class="w-full px-4 py-2 rounded bg-gray-700 text-white" required />
+        <div class="flex justify-between">
+          <button type="submit" class="bg-green-500 hover:bg-green-600 px-4 py-2 rounded w-full">Login</button>
+          <button type="button" id="signup-btn" class="ml-2 px-4 py-2 rounded w-full bg-blue-500 hover:bg-blue-600">Signup</button>
+        </div>
+      </form>
+    </div>
+
+    <script>
+      window.BACKEND_URL = "https://quainex.onrender.com";
+    </script>
+    <script src="app.js" defer></script>
+  </body>
+</html>
