@@ -77,6 +77,7 @@ chatForm.addEventListener("submit", async (e) => {
 
   appendMessage("You", message, "user");
   userInput.value = "";
+
   const loader = appendMessage("Quainex", "...", "bot", true);
   showTyping(loader.querySelector(".typing"));
 
@@ -87,7 +88,7 @@ chatForm.addEventListener("submit", async (e) => {
       personality: "default",
     };
 
-    const res = await fetch(`${backendBaseUrl}/chat`, {
+    const res = await fetch(`${backendBaseUrl}/api/chat`, { // ensure correct path
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -97,13 +98,29 @@ chatForm.addEventListener("submit", async (e) => {
 
     const data = await res.json();
     loader.remove();
+
+    // Handle backend errors or missing response
+    if (!res.ok || data.success === false) {
+      const errMsg = data.error || `Error: ${res.status} ${res.statusText}`;
+      console.error("Chat API error:", errMsg, data);
+      appendMessage("Quainex", `⚠️ ${errMsg}`, "bot");
+      return;
+    }
+
+    if (!data.response || !data.response.trim()) {
+      console.warn("Empty AI response:", data);
+      appendMessage("Quainex", "⚠️ I got an empty response from the AI provider. Please try again.", "bot");
+      return;
+    }
+
     appendMessage("Quainex", data.response, "bot");
   } catch (error) {
-    console.error("Chat error:", error);
+    console.error("Chat network error:", error);
     loader.remove();
-    appendMessage("Quainex", "⚠️ Sorry, I encountered an error. Please try again.", "bot");
+    appendMessage("Quainex", "⚠️ Sorry, I encountered a network error. Please try again.", "bot");
   }
 });
+
 
 // ---------- Typing Dots Animation ----------
 function showTyping(el) {

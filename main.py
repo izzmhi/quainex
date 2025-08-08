@@ -141,8 +141,9 @@ def build_prompt_context(prompt: str, personality: str = "default", history: lis
     messages.append({"role": "user", "content": prompt})
     return messages
 
+# ---------- Robust fetch_ai_response (replace existing one) ----------
 async def fetch_ai_response(provider: str, messages: list, timeout: int = 60):
-    """Handle communication with different AI providers"""
+    """Handle communication with different AI providers (robust parsing + logging)"""
     if provider not in API_KEYS or not API_KEYS[provider]:
         raise HTTPException(
             status_code=status.HTTP_501_NOT_IMPLEMENTED,
@@ -169,10 +170,7 @@ async def fetch_ai_response(provider: str, messages: list, timeout: int = 60):
 
     config = endpoints.get(provider)
     if not config:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid provider specified"
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid provider specified")
 
     payload = {
         "model": config["model"],
@@ -183,30 +181,60 @@ async def fetch_ai_response(provider: str, messages: list, timeout: int = 60):
 
     try:
         async with httpx.AsyncClient(timeout=timeout) as client:
-            response = await client.post(
-                config["url"],
-                headers=config["headers"],
-                json=payload
-            )
-            response.raise_for_status()
-            data = response.json()
+            resp = await client.post(config["url"], headers=config["headers"], json=payload)
+            # Raise for non-2xx
+            resp.raise_for_status()
+
+            raw_text = resp.text
+            try:
+                data = resp.json()
+            except Exception:
+                logger.error("Invalid JSON from provider: %s", raw_text)
+                raise HTTPException(status_code=502, detail="Invalid JSON from AI provider")
+
+            logger.info("%s raw response: %s", provider, data)
+
+            # Defensive extraction: try a few common shapes
+            content = None
+            if isinstance(data, dict):
+                # common openai-like shape
+                choices = data.get("choices") or data.get("results") or []
+                if choices and isinstance(choices, list):
+                    first = choices[0]
+                    if isinstance(first, dict):
+                        content = (first.get("message") or {}).get("content") or first.get("text") or first.get("content")
+
+                # fallback top-level keys
+                content = content or data.get("response") or data.get("output_text") or data.get("text")
+
+                # some providers return {"message": {"content": "..."}}
+                if not content and isinstance(data.get("message"), dict):
+                    content = data["message"].get("content")
+
+            # Final sanity
+            if not content or not str(content).strip():
+                logger.error("No content found in provider response: %s", data)
+                raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="AI provider returned empty response")
+
             return {
-                "response": data["choices"][0]["message"]["content"],
-                "model": data["model"],
+                "response": str(content).strip(),
+                "model": data.get("model", config["model"]),
                 "usage": data.get("usage", {})
             }
+
     except httpx.HTTPStatusError as e:
-        logger.error(f"API error: {e.response.status_code} {e.response.text}")
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=f"AI service error: {e.response.text}"
-        )
+        # provider returned non-2xx
+        body = e.response.text if e.response is not None else "no body"
+        logger.error("API error from provider: %s %s", e.response.status_code if e.response else "?", body)
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=f"AI service error: {body}")
+    except HTTPException:
+        # re-raise HTTPExceptions we deliberately raised above
+        raise
     except Exception as e:
-        logger.error(f"Failed to get AI response: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to get AI response"
-        )
+        logger.exception("Unexpected error fetching AI response")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to get AI response: {str(e)}")
+# --------------------------------------------------------------------
+
 
 # ---------- API Routes ---------- #
 @app.post("/api/chat", response_model=dict, tags=["AI Services"])
