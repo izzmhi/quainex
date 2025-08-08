@@ -58,15 +58,12 @@ function updateUserAvatar(username) {
 }
 
 // Fetches user details to verify session via cookie
+// Fetches user details to verify session via cookie
 async function fetchMe() {
   try {
     const res = await fetch(`${backendBaseUrl}/me`, {
       credentials: "include",
-      headers: {
-        "Cache-Control": "no-store",
-        "SameSite": "None",  // Explicit SameSite header
-        "Secure": "true"     // Explicit Secure header
-      }
+      headers: { "Cache-Control": "no-store" }
     });
     
     if (!res.ok) {

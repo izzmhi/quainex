@@ -45,10 +45,7 @@ if GROQ_API_KEY:
 app = FastAPI()
 
 origins = [
-    "http://127.0.0.1:5500",
-    "https://quainex.onrender.com",
-    "https://quainexai.onrender.com"
-]
+    "https://quainexai.onrender.com"]
 
 app.add_middleware(
     CORSMiddleware,
