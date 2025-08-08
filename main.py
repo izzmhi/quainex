@@ -45,13 +45,10 @@ if GROQ_API_KEY:
 # ---------- FastAPI App ---------- #
 app = FastAPI()
 
-# IMPORTANT: Update this list with your actual frontend domains for production
-# For local development, you might use ["http://localhost:3000"] or similar.
-# For Render deployment, replace with your actual frontend URL(s), e.g., ["https://your-quainex-app-frontend.onrender.com"]
 origins = [
     "http://127.0.0.1:5500",
     "https://quainex.onrender.com",
-    "https://your-frontend-domain.com"  # Add your actual frontend domain here
+    "https://quainexai.onrender.com"
 ]
 
 app.add_middleware(
