@@ -274,16 +274,18 @@ def login_with_cookie(form: OAuth2PasswordRequestForm = Depends(), db: Session =
     user = authenticate_user(db, form.username, form.password)
     if not user:
         raise HTTPException(status_code=400, detail="Incorrect username or password")
-    access_token = create_access_token(data={"sub": user.username}, expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
+    
+    access_token = create_access_token(data={"sub": user.username})
     
     response = Response(content="Login successful", media_type="text/plain")
     response.set_cookie(
         key="access_token",
         value=access_token,
         httponly=True,
-        samesite="Lax",  # Or "None" if using cross-site
-        secure=True,      # True for production (HTTPS)
-        max_age=1800      # 30 minutes expiration
+        samesite="None",
+        secure=True,
+        max_age=1800,
+        domain=".onrender.com"  # Important for Render
     )
     return response
 
