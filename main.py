@@ -45,7 +45,9 @@ if GROQ_API_KEY:
 app = FastAPI()
 
 origins = [
-    "https://quainexai.onrender.com"]
+    "https://quainexai.onrender.com",
+    "https://quainex.onrender.com"
+]
 
 app.add_middleware(
     CORSMiddleware,
@@ -274,17 +276,18 @@ def login_with_cookie(form: OAuth2PasswordRequestForm = Depends(), db: Session =
     )
     
     response = Response(content="Login successful", media_type="text/plain")
-    response.set_cookie(
-        key="access_token",
-        value=access_token,
-        httponly=True,
-        samesite="none",
-        secure=True,
-        max_age=1800,
-        domain=".onrender.com",
-        path="/"  
-    )
-    return response
+# In your /token-cookie endpoint (main.py)
+response.set_cookie(
+    key="access_token",
+    value=access_token,
+    httponly=True,
+    samesite="none",
+    secure=True,
+    max_age=1800,
+    domain=".onrender.com",  # Note the leading dot for subdomains
+    path="/",
+    partitioned=True  # Important for cross-site cookies
+)
 
 @app.post("/logout")
 def logout(response: Response):

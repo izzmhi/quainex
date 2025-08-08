@@ -33,17 +33,25 @@ let audio = new Audio();
 const backendBaseUrl = window.BACKEND_URL;
 
 // ---------- Init ----------
-function init() {
-  currentUser = localStorage.getItem("quainex_user"); // Still use localStorage for username display
+async function init() {
+  currentUser = localStorage.getItem("quainex_user");
   const provider = localStorage.getItem("provider") || "openrouter";
   providerSelect.value = provider;
 
-  // Check if a user is "known" from previous session (username in localStorage)
-  // Then verify session with backend via cookie
   if (currentUser) {
-    showChat();
-    updateUserAvatar(currentUser); // Update avatar immediately if username is known
-    fetchMe(); // Verify the session via backend cookie
+    try {
+      const sessionValid = await fetchMe();
+      if (sessionValid) {
+        showChat();
+        updateUserAvatar(currentUser);
+      } else {
+        localStorage.removeItem("quainex_user");
+        loginScreen.classList.remove("hidden");
+      }
+    } catch (error) {
+      console.error("Init error:", error);
+      loginScreen.classList.remove("hidden");
+    }
   } else {
     loginScreen.classList.remove("hidden");
   }
@@ -101,26 +109,29 @@ loginForm.addEventListener("submit", async (e) => {
   }
 
   try {
-    // First clear any existing session
+    // Clear existing session first
     await fetch(`${backendBaseUrl}/logout`, {
       method: "POST",
       credentials: "include"
     });
 
-    // Attempt login
+    // Attempt login with URL-encoded form data
+    const formData = new URLSearchParams();
+    formData.append('username', username);
+    formData.append('password', password);
+
     const loginRes = await fetch(`${backendBaseUrl}/token-cookie`, {
       method: "POST",
-      headers: { 
+      headers: {
         "Content-Type": "application/x-www-form-urlencoded",
-        "Cache-Control": "no-store"
       },
       credentials: "include",
-      body: `username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`,
+      body: formData
     });
 
     if (!loginRes.ok) {
-      const data = await loginRes.json();
-      showCustomMessage("Login failed: " + (data.detail || "Invalid credentials"));
+      const error = await loginRes.json().catch(() => ({ detail: "Invalid credentials" }));
+      showCustomMessage("Login failed: " + (error.detail || "Invalid credentials"));
       passwordInput.value = "";
       return;
     }
