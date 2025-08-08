@@ -63,18 +63,20 @@ async function fetchMe() {
     const res = await fetch(`${backendBaseUrl}/me`, {
       credentials: "include",
       headers: {
-        "Cache-Control": "no-cache"
+        "Cache-Control": "no-store"  // More aggressive cache control
       }
     });
+    
     if (!res.ok) {
-      console.error("Session verification failed:", await res.text());  // Log full error
+      const errorText = await res.text();
+      console.error("Session verification failed:", res.status, errorText);
       handleTokenExpiry();
       return false;
     }
     const user = await res.json();
-    currentUser = user.username; // Update currentUser from backend response
-    localStorage.setItem("quainex_user", currentUser); // Keep username in localStorage for convenience
-    updateUserAvatar(currentUser); // Update avatar after successful verification
+    currentUser = user.username;
+    localStorage.setItem("quainex_user", currentUser);
+    updateUserAvatar(currentUser);
     console.log("Session verified for user:", currentUser);
     return true;
   } catch (error) {
@@ -92,6 +94,7 @@ loginForm.addEventListener("submit", async (e) => {
   
   const username = usernameInput.value.trim();
   const password = passwordInput.value.trim();
+  
   if (!username || !password) {
     showCustomMessage("Please enter username and password.");
     loginLoading.classList.add("hidden");
@@ -99,37 +102,49 @@ loginForm.addEventListener("submit", async (e) => {
   }
 
   try {
-    const res = await fetch(`${backendBaseUrl}/token-cookie`, {
+    // First clear any existing session
+    await fetch(`${backendBaseUrl}/logout`, {
       method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      credentials: "include"
+    });
+
+    // Attempt login
+    const loginRes = await fetch(`${backendBaseUrl}/token-cookie`, {
+      method: "POST",
+      headers: { 
+        "Content-Type": "application/x-www-form-urlencoded",
+        "Cache-Control": "no-store"
+      },
       credentials: "include",
       body: `username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`,
     });
 
-    if (res.ok) {
-      const sessionVerified = await fetchMe();
-      if (sessionVerified) {
-        currentUser = username;
-        localStorage.setItem("quainex_user", currentUser);
-        updateUserAvatar(currentUser);
-        showChat();
-        showCustomMessage("Login successful!");
-      } else {
-        showCustomMessage("Login failed: Session could not be verified.");
-      }
-    } else {
-      const data = await res.json();
+    if (!loginRes.ok) {
+      const data = await loginRes.json();
       showCustomMessage("Login failed: " + (data.detail || "Invalid credentials"));
       passwordInput.value = "";
+      return;
+    }
+
+    // Verify session
+    const sessionVerified = await fetchMe();
+    if (sessionVerified) {
+      currentUser = username;
+      localStorage.setItem("quainex_user", currentUser);
+      updateUserAvatar(currentUser);
+      showChat();
+      showCustomMessage("Login successful!");
+    } else {
+      showCustomMessage("Session verification failed. Please try again.");
     }
   } catch (error) {
     console.error("Login error:", error);
     showCustomMessage("Login error. Please check the connection.");
-    passwordInput.value = "";
   } finally {
     loginLoading.classList.add("hidden");
   }
 });
+
 // ---------- Signup ----------
 signupBtn.addEventListener("click", async () => {
   const loginLoading = document.getElementById("login-loading");
