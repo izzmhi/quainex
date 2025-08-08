@@ -1,6 +1,7 @@
 # main.py
 from fastapi import FastAPI, Request, HTTPException, status, Response, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 import os
 import httpx
@@ -8,30 +9,52 @@ from dotenv import load_dotenv
 import asyncio
 from elevenlabs.client import ElevenLabs
 from groq import Groq
+from typing import Optional
+import logging
+from datetime import datetime
 
-# ---------- Load Environment Variables ---------- #
+# ---------- Configuration ---------- #
 load_dotenv()
-OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
-TOGETHER_API_KEY = os.getenv("TOGETHER_API_KEY")
-GROQ_API_KEY = os.getenv("GROQ_API_KEY")
-ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY")
-SERPER_API_KEY = os.getenv("SERPER_API_KEY")
 
-# Initialize ElevenLabs and Groq clients
-elevenlabs_client = None
-if ELEVENLABS_API_KEY:
-    elevenlabs_client = ElevenLabs(api_key=ELEVENLABS_API_KEY)
-    
-groq_client = None
-if GROQ_API_KEY:
-    groq_client = Groq(api_key=GROQ_API_KEY)
+# Initialize logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler()
+    ]
+)
+logger = logging.getLogger(__name__)
+
+# API Keys
+API_KEYS = {
+    "openrouter": os.getenv("OPENROUTER_API_KEY"),
+    "together": os.getenv("TOGETHER_API_KEY"),
+    "groq": os.getenv("GROQ_API_KEY"),
+    "elevenlabs": os.getenv("ELEVENLABS_API_KEY"),
+    "serper": os.getenv("SERPER_API_KEY")
+}
+
+# Initialize clients
+clients = {
+    "elevenlabs": ElevenLabs(api_key=API_KEYS["elevenlabs"]) if API_KEYS["elevenlabs"] else None,
+    "groq": Groq(api_key=API_KEYS["groq"]) if API_KEYS["groq"] else None
+}
 
 # ---------- FastAPI App ---------- #
-app = FastAPI()
+app = FastAPI(
+    title="Quainex AI API",
+    description="Premium AI Assistant Backend Service",
+    version="1.0.0",
+    docs_url="/api/docs",
+    redoc_url="/api/redoc"
+)
 
+# CORS Configuration
 origins = [
     "https://quainexai.onrender.com",
-    "https://quainex.onrender.com"
+    "https://quainex.onrender.com",
+    "http://localhost:3000"
 ]
 
 app.add_middleware(
@@ -40,247 +63,474 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
-    expose_headers=["Set-Cookie"]
+    expose_headers=["X-Response-Time"]
 )
 
+# Middleware for logging and response time
+@app.middleware("http")
+async def add_process_time_header(request: Request, call_next):
+    start_time = datetime.now()
+    response = await call_next(request)
+    process_time = (datetime.now() - start_time).total_seconds()
+    response.headers["X-Response-Time"] = str(process_time)
+    logger.info(f"{request.method} {request.url.path} - {response.status_code} - {process_time:.3f}s")
+    return response
+
 # ---------- Pydantic Models ---------- #
-class ChatData(BaseModel):
+class ChatRequest(BaseModel):
     message: str
     provider: str = "openrouter"
     personality: str = "default"
+    conversation_id: Optional[str] = None
 
-class ToolData(BaseModel):
+class ToolRequest(BaseModel):
     tool: str
     content: str
     provider: str = "openrouter"
+    options: Optional[dict] = None
 
-class SearchData(BaseModel):
+class SearchRequest(BaseModel):
     query: str
+    provider: str = "openrouter"
+    num_results: int = 5
 
-class TextToSpeechData(BaseModel):
+class TTSRequest(BaseModel):
     text: str
+    voice: str = "Rachel"
+    model: str = "eleven_monolingual_v2"
 
-class ImageGenerationData(BaseModel):
+class ImageGenRequest(BaseModel):
     prompt: str
+    size: str = "1024x1024"
+    quality: str = "standard"
+    style: str = "vivid"
 
-# ------------------ Personality System ------------------ #
+class VoiceRequest(BaseModel):
+    language: str = "en-US"
+    model: str = "whisper-1"
+
+# ---------- Personality System ---------- #
 PERSONALITIES = {
-    "default": "You are Quainex, an intelligent AI assistant created by Bright SecureTech. You help users clearly and kindly. You were built by Bright Quainoo.",
-    "strict": "You are Quainex, a very serious and efficient AI built to provide accurate answers only and also a hacker and a software specialist.",
-    "fun": "You're Quainex, a witty and entertaining assistant who helps users with a fun attitude."
+    "default": {
+        "name": "Standard Assistant",
+        "system_prompt": "You are Quainex, an intelligent AI assistant created by Bright SecureTech. Provide clear, concise, and helpful responses. Maintain a professional yet friendly tone."
+    },
+    "strict": {
+        "name": "Technical Expert",
+        "system_prompt": "You are Quainex, a highly technical AI assistant specialized in software development, cybersecurity, and system analysis. Provide precise, factual answers with minimal fluff."
+    },
+    "fun": {
+        "name": "Entertaining Assistant",
+        "system_prompt": "You're Quainex, a witty and entertaining AI. Use humor, emojis, and a casual tone while still being helpful. Keep responses engaging and fun!"
+    },
+    "creative": {
+        "name": "Creative Writer",
+        "system_prompt": "You are Quainex in creative mode. Provide imaginative, detailed responses. Use rich descriptions and creative analogies when appropriate."
+    }
 }
 
-# ------------------ Helpers ------------------ #
-def build_contextual_prompt(current_prompt: str, personality: str = "default"):
-    messages = [{"role": "system", "content": PERSONALITIES.get(personality, PERSONALITIES["default"])}]
-    messages.append({"role": "user", "content": current_prompt})
+# ---------- Helper Functions ---------- #
+def build_prompt_context(prompt: str, personality: str = "default", history: list = None):
+    """Build the conversation context with personality and optional history"""
+    base_prompt = PERSONALITIES.get(personality, PERSONALITIES["default"])["system_prompt"]
+    messages = [{"role": "system", "content": base_prompt}]
+    
+    if history:
+        messages.extend(history)
+    
+    messages.append({"role": "user", "content": prompt})
     return messages
 
-async def get_chat_response(provider: str, messages: list):
-    headers = {}
-    data = {"messages": messages}
-    url = ""
-    model = ""
-    timeout = httpx.Timeout(60.0)
+async def fetch_ai_response(provider: str, messages: list, timeout: int = 60):
+    """Handle communication with different AI providers"""
+    if provider not in API_KEYS or not API_KEYS[provider]:
+        raise HTTPException(
+            status_code=status.HTTP_501_NOT_IMPLEMENTED,
+            detail=f"{provider.capitalize()} API key not configured"
+        )
 
-    if provider == "openrouter":
-        if not OPENROUTER_API_KEY:
-            return {"response": "⚠️ OpenRouter API key is not configured."}
-        headers = {"Authorization": f"Bearer {OPENROUTER_API_KEY}", "Content-Type": "application/json"}
-        model = "openai/gpt-3.5-turbo"
-        url = "https://openrouter.ai/api/v1/chat/completions"
-    elif provider == "together":
-        if not TOGETHER_API_KEY:
-            return {"response": "⚠️ Together AI key is not configured."}
-        headers = {"Authorization": f"Bearer {TOGETHER_API_KEY}", "Content-Type": "application/json"}
-        model = "mistralai/Mixtral-8x7B-Instruct-v0.1"
-        url = "https://api.together.xyz/v1/chat/completions"
-    elif provider == "groq":
-        if not GROQ_API_KEY:
-            return {"response": "⚠️ Groq API key is not configured."}
-        headers = {"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"}
-        model = "llama3-70b-8192"
-        url = "https://api.groq.com/openai/v1/chat/completions"
-    else:
-        return {"response": "⚠️ Invalid provider."}
-    
-    data["model"] = model
-
-    try:
-        async with httpx.AsyncClient(timeout=timeout) as client:
-            response = await client.post(url, headers=headers, json=data)
-            response.raise_for_status()
-            res = response.json()
-            return {"response": res["choices"][0]["message"]["content"]}
-    except httpx.HTTPStatusError as e:
-        print(f"API error: {e.response.status_code} {e.response.text}")
-        return {"response": f"⚠️ API error: {e.response.status_code} {e.response.text}"}
-    except Exception as e:
-        print(f"Failed to get response from AI: {str(e)}")
-        return {"response": f"⚠️ Failed to get response from AI: {str(e)}"}
-
-
-# ------------------ Routes ------------------ #
-@app.post("/chat")
-async def chat(data: ChatData):
-    prompt = data.message
-    provider = data.provider
-    personality = data.personality
-
-    if not prompt:
-        raise HTTPException(status_code=400, detail="⚠️ Prompt is required.")
-
-    messages_context = build_contextual_prompt(prompt, personality) 
-    ai_response = await get_chat_response(provider, messages_context)
-    
-    return ai_response
-
-@app.post("/tool")
-async def run_tool(data: ToolData):
-    tool = data.tool
-    content = data.content
-    provider = data.provider
-
-    tool_prompts = {
-        "summarize": "Summarize this content clearly and concisely.",
-        "translate": "Translate this text into the language they specify.",
-        "analyze": "Analyze the following content and provide key insights."
+    endpoints = {
+        "openrouter": {
+            "url": "https://openrouter.ai/api/v1/chat/completions",
+            "model": "openai/gpt-4-turbo",
+            "headers": {"Authorization": f"Bearer {API_KEYS['openrouter']}"}
+        },
+        "together": {
+            "url": "https://api.together.xyz/v1/chat/completions",
+            "model": "mistralai/Mixtral-8x7B-Instruct-v0.1",
+            "headers": {"Authorization": f"Bearer {API_KEYS['together']}"}
+        },
+        "groq": {
+            "url": "https://api.groq.com/openai/v1/chat/completions",
+            "model": "llama3-70b-8192",
+            "headers": {"Authorization": f"Bearer {API_KEYS['groq']}"}
+        }
     }
 
-    if tool not in tool_prompts:
-        raise HTTPException(status_code=400, detail="⚠️ Unknown tool selected.")
+    config = endpoints.get(provider)
+    if not config:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid provider specified"
+        )
 
-    messages = [
-        {"role": "system", "content": tool_prompts[tool]},
-        {"role": "user", "content": content}
-    ]
-
-    response = await get_chat_response(provider, messages)
-    
-    return response
-
-@app.post("/search")
-async def search_web(data: SearchData):
-    query = data.query
-
-    if not query:
-        raise HTTPException(status_code=400, detail="⚠️ Query is required.")
-    
-    if not SERPER_API_KEY:
-        raise HTTPException(status_code=501, detail="Serper API key not configured")
-
-    headers = {"X-API-KEY": SERPER_API_KEY, "Content-Type": "application/json"}
-    payload = {"q": query, "gl": "us", "hl": "en"}
-    timeout = httpx.Timeout(30.0)
+    payload = {
+        "model": config["model"],
+        "messages": messages,
+        "temperature": 0.7,
+        "max_tokens": 2000
+    }
 
     try:
         async with httpx.AsyncClient(timeout=timeout) as client:
-            response = await client.post("https://google.serper.dev/search", headers=headers, json=payload)
+            response = await client.post(
+                config["url"],
+                headers=config["headers"],
+                json=payload
+            )
             response.raise_for_status()
-            search_data = response.json()
-            results = search_data.get("organic", [])
-
-            if not results:
-                return {"response": "❌ No search results found."}
-
-            summary = "\n".join([f"- {r['title']}\n{r['link']}" for r in results[:5]])
-            
-            return {"response": summary}
+            data = response.json()
+            return {
+                "response": data["choices"][0]["message"]["content"],
+                "model": data["model"],
+                "usage": data.get("usage", {})
+            }
     except httpx.HTTPStatusError as e:
-        print(f"Serper API error: {e.response.status_code} {e.response.text}")
-        raise HTTPException(status_code=e.response.status_code, detail=f"⚠️ Search API error: {e.response.text}")
+        logger.error(f"API error: {e.response.status_code} {e.response.text}")
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"AI service error: {e.response.text}"
+        )
     except Exception as e:
-        print(f"Search error: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"⚠️ Search error: {str(e)}")
+        logger.error(f"Failed to get AI response: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to get AI response"
+        )
 
-@app.post("/ask-and-search")
-async def ask_and_search(data: SearchData):
-    query = data.query
-    provider = "openrouter"
-
-    if not query:
-        raise HTTPException(status_code=400, detail="⚠️ Query is required.")
+# ---------- API Routes ---------- #
+@app.post("/api/chat", response_model=dict, tags=["AI Services"])
+async def chat_handler(request: ChatRequest):
+    """
+    Handle chat conversations with different AI providers and personalities.
     
-    if not SERPER_API_KEY:
-        raise HTTPException(status_code=501, detail="Serper API key not configured")
-
-    headers = {"X-API-KEY": SERPER_API_KEY, "Content-Type": "application/json"}
-    payload = {"q": query, "gl": "us", "hl": "en"}
-    timeout = httpx.Timeout(30.0)
-
+    - **message**: User's input message
+    - **provider**: AI provider (openrouter|together|groq)
+    - **personality**: Response style (default|strict|fun|creative)
+    - **conversation_id**: Optional conversation ID for context
+    """
     try:
-        async with httpx.AsyncClient(timeout=timeout) as client:
-            search_response = await client.post("https://google.serper.dev/search", headers=headers, json=payload)
-            search_response.raise_for_status()
-            search_data = search_response.json()
-            results = search_data.get("organic", [])
+        messages = build_prompt_context(
+            request.message,
+            request.personality
+        )
+        
+        response = await fetch_ai_response(
+            request.provider,
+            messages
+        )
+        
+        return {
+            "success": True,
+            "response": response["response"],
+            "metadata": {
+                "provider": request.provider,
+                "model": response["model"],
+                "personality": request.personality,
+                "usage": response["usage"]
+            }
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Chat error: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An error occurred during chat processing"
+        )
 
-            if not results:
-                return {"response": "❌ No search results found."}
+@app.post("/api/tools/{tool}", response_model=dict, tags=["AI Services"])
+async def tool_handler(tool: str, request: ToolRequest):
+    """
+    Handle various AI tools (summarize, translate, analyze, etc.)
+    
+    - **tool**: Tool to use (summarize|translate|analyze|search)
+    - **content**: Content to process
+    - **provider**: AI provider (openrouter|together|groq)
+    - **options**: Additional tool-specific options
+    """
+    tool_prompts = {
+        "summarize": "Provide a concise summary of the following content. Focus on key points and main ideas.",
+        "translate": "Translate the following text to the specified language. Maintain original meaning and tone.",
+        "analyze": "Analyze this content and provide key insights, patterns, and important information.",
+        "search": "Process these search results and extract the most relevant information."
+    }
+    
+    if tool not in tool_prompts:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Unsupported tool specified"
+        )
+    
+    try:
+        messages = [
+            {"role": "system", "content": tool_prompts[tool]},
+            {"role": "user", "content": request.content}
+        ]
+        
+        if request.options:
+            messages[0]["content"] += f"\nOptions: {request.options}"
+        
+        response = await fetch_ai_response(
+            request.provider,
+            messages
+        )
+        
+        return {
+            "success": True,
+            "result": response["response"],
+            "tool": tool,
+            "provider": request.provider
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Tool error ({tool}): {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error processing {tool} request"
+        )
 
-            combined_text = "\n".join([f"{r['title']} - {r['snippet']}" for r in results[:5]])
-
-            messages = [
-                {"role": "system", "content": "Summarize and explain this web search result:"},
-                {"role": "user", "content": combined_text}
-            ]
-
-            ai_response = await get_chat_response(provider, messages)
+@app.post("/api/search", response_model=dict, tags=["AI Services"])
+async def search_handler(request: SearchRequest):
+    """
+    Perform web search and optionally process results with AI
+    
+    - **query**: Search query
+    - **provider**: AI provider for processing (openrouter|together|groq)
+    - **num_results**: Number of results to return (default: 5)
+    """
+    if not API_KEYS["serper"]:
+        raise HTTPException(
+            status_code=status.HTTP_501_NOT_IMPLEMENTED,
+            detail="Search functionality not configured"
+        )
+    
+    try:
+        headers = {"X-API-KEY": API_KEYS["serper"], "Content-Type": "application/json"}
+        payload = {"q": request.query, "gl": "us", "hl": "en", "num": request.num_results}
+        
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(
+                "https://google.serper.dev/search",
+                headers=headers,
+                json=payload
+            )
+            response.raise_for_status()
+            data = response.json()
             
-            return {"response": ai_response["response"]}
+            organic_results = data.get("organic", [])
+            if not organic_results:
+                return {
+                    "success": True,
+                    "results": [],
+                    "message": "No results found"
+                }
+            
+            # Process with AI if provider specified
+            if request.provider:
+                context = "\n".join([
+                    f"Title: {r['title']}\nLink: {r['link']}\nSnippet: {r.get('snippet', '')}"
+                    for r in organic_results[:5]
+                ])
+                
+                ai_response = await fetch_ai_response(
+                    request.provider,
+                    [
+                        {"role": "system", "content": "Summarize these search results concisely."},
+                        {"role": "user", "content": context}
+                    ]
+                )
+                
+                return {
+                    "success": True,
+                    "results": organic_results,
+                    "summary": ai_response["response"],
+                    "processed": True
+                }
+            
+            return {
+                "success": True,
+                "results": organic_results,
+                "processed": False
+            }
     except httpx.HTTPStatusError as e:
-        print(f"Serper API error: {e.response.status_code} {e.response.text}")
-        raise HTTPException(status_code=e.response.status_code, detail=f"⚠️ Combined tool API error: {e.response.text}")
+        logger.error(f"Search API error: {e.response.status_code} {e.response.text}")
+        raise HTTPException(
+            status_code=e.response.status_code,
+            detail="Search service error"
+        )
     except Exception as e:
-        print(f"Combined tool error: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"⚠️ Combined tool error: {str(e)}")
+        logger.error(f"Search error: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Error processing search request"
+        )
 
-@app.post("/tts")
-async def text_to_speech(data: TextToSpeechData):
-    if not elevenlabs_client:
-        raise HTTPException(status_code=501, detail="ElevenLabs API key not configured")
+@app.post("/api/tts", tags=["AI Services"])
+async def tts_handler(request: TTSRequest):
+    """
+    Convert text to speech
+    
+    - **text**: Text to convert
+    - **voice**: Voice to use (Rachel, Bella, etc.)
+    - **model**: TTS model to use
+    """
+    if not clients["elevenlabs"]:
+        raise HTTPException(
+            status_code=status.HTTP_501_NOT_IMPLEMENTED,
+            detail="TTS service not configured"
+        )
+    
     try:
-        audio = elevenlabs_client.generate(text=data.text, voice="Rachel")
-        return Response(content=audio, media_type="audio/mpeg")
+        audio = clients["elevenlabs"].generate(
+            text=request.text,
+            voice=request.voice,
+            model=request.model
+        )
+        return Response(
+            content=audio,
+            media_type="audio/mpeg",
+            headers={"Content-Disposition": "inline; filename=quainex-tts.mp3"}
+        )
     except Exception as e:
-        print(f"ElevenLabs TTS error: {str(e)}")
-        raise HTTPException(status_code=500, detail="⚠️ Failed to generate speech.")
+        logger.error(f"TTS error: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Error generating speech"
+        )
 
-@app.post("/image-generation")
-async def image_generation(data: ImageGenerationData):
-    if not groq_client:
-        raise HTTPException(status_code=501, detail="Groq API key not configured")
+@app.post("/api/images", response_model=dict, tags=["AI Services"])
+async def image_gen_handler(request: ImageGenRequest):
+    """
+    Generate images from text prompts
+    
+    - **prompt**: Description of the image to generate
+    - **size**: Image dimensions (1024x1024, 512x512, etc.)
+    - **quality**: Image quality (standard|hd)
+    - **style**: Image style (vivid|natural)
+    """
+    if not clients["groq"]:
+        raise HTTPException(
+            status_code=status.HTTP_501_NOT_IMPLEMENTED,
+            detail="Image generation not configured"
+        )
+    
     try:
-        response = groq_client.images.generate(
-            model="dall-e",
-            prompt=data.prompt,
-            size="1024x1024",
-            quality="standard",
+        response = clients["groq"].images.generate(
+            model="dall-e-3",
+            prompt=request.prompt,
+            size=request.size,
+            quality=request.quality,
+            style=request.style,
             n=1
         )
-        image_url = response.data[0].url
-        return {"image_url": image_url}
+        
+        return {
+            "success": True,
+            "image_url": response.data[0].url,
+            "revised_prompt": response.data[0].revised_prompt
+        }
     except Exception as e:
-        print(f"Groq Image Generation error: {str(e)}")
-        raise HTTPException(status_code=500, detail="⚠️ Failed to generate image.")
+        logger.error(f"Image generation error: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Error generating image"
+        )
 
-@app.post("/voice")
-async def voice_transcription(file: UploadFile = File(...)):
-    # Placeholder for voice transcription.
-    # In a real application, you would send 'file.file' (BytesIO object) to a Speech-to-Text API
-    # (e.g., Google Cloud Speech-to-Text, OpenAI Whisper, AssemblyAI).
-    # For now, it returns a dummy response.
-    print(f"Received voice file: {file.filename}, content type: {file.content_type}")
-    return {"response": "Voice transcription is a placeholder. Integrate a Speech-to-Text API here!"}
-
-@app.get("/models")
-def list_models():
+@app.post("/api/voice", response_model=dict, tags=["AI Services"])
+async def voice_handler(file: UploadFile = File(...), request: VoiceRequest = None):
+    """
+    Convert speech to text
+    
+    - **file**: Audio file to transcribe
+    - **language**: Language of the audio (en-US, etc.)
+    - **model**: Transcription model to use
+    """
+    # This is a placeholder implementation
+    # In production, integrate with Whisper or similar service
+    logger.info(f"Received voice file: {file.filename} ({file.content_type})")
+    
     return {
-        "openrouter": ["openai/gpt-3.5-turbo"],
-        "together": ["mistralai/Mixtral-8x7B-Instruct-v0.1"],
-        "groq": ["llama3-70b-8192"]
+        "success": True,
+        "message": "Voice transcription service placeholder",
+        "details": "In production, this would return transcribed text from the audio file."
     }
 
-@app.get("/personality")
-def list_personalities():
-    return {"available": list(PERSONALITIES.keys())}
+# ---------- Metadata Endpoints ---------- #
+@app.get("/api/models", response_model=dict, tags=["Metadata"])
+async def list_models():
+    """List available AI models for each provider"""
+    return {
+        "openrouter": [
+            {"id": "openai/gpt-4-turbo", "name": "GPT-4 Turbo"},
+            {"id": "anthropic/claude-3-opus", "name": "Claude 3 Opus"}
+        ],
+        "together": [
+            {"id": "mistralai/Mixtral-8x7B-Instruct-v0.1", "name": "Mixtral 8x7B"},
+            {"id": "meta-llama/Llama-3-70b-chat-hf", "name": "Llama 3 70B"}
+        ],
+        "groq": [
+            {"id": "llama3-70b-8192", "name": "Llama 3 70B"},
+            {"id": "mixtral-8x7b-32768", "name": "Mixtral 8x7B"}
+        ]
+    }
+
+@app.get("/api/personalities", response_model=dict, tags=["Metadata"])
+async def list_personalities():
+    """List available response personalities"""
+    return {
+        "personalities": [
+            {"id": key, "name": value["name"]} 
+            for key, value in PERSONALITIES.items()
+        ]
+    }
+
+@app.get("/api/status", response_model=dict, tags=["Metadata"])
+async def service_status():
+    """Check service status and available features"""
+    return {
+        "status": "operational",
+        "version": "1.0.0",
+        "features": {
+            "chat": bool(API_KEYS["openrouter"] or API_KEYS["together"] or API_KEYS["groq"]),
+            "tts": bool(API_KEYS["elevenlabs"]),
+            "image_generation": bool(API_KEYS["groq"]),
+            "search": bool(API_KEYS["serper"])
+        },
+        "uptime": str(datetime.now())
+    }
+
+# ---------- Error Handlers ---------- #
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException):
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={
+            "success": False,
+            "error": exc.detail,
+            "code": exc.status_code
+        }
+    )
+
+@app.exception_handler(500)
+async def internal_error_handler(request: Request, exc: Exception):
+    logger.error(f"Server error: {str(exc)}")
+    return JSONResponse(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        content={
+            "success": False,
+            "error": "Internal server error",
+            "code": status.HTTP_500_INTERNAL_SERVER_ERROR
+        }
+    )
