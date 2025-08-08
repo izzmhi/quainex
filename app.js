@@ -62,10 +62,12 @@ async function fetchMe() {
   try {
     const res = await fetch(`${backendBaseUrl}/me`, {
       credentials: "include",
+      headers: {
+        "Cache-Control": "no-cache"
+      }
     });
     if (!res.ok) {
-      // If session is expired or invalid, handle it
-      console.error("Session verification failed:", res.status);
+      console.error("Session verification failed:", await res.text());  // Log full error
       handleTokenExpiry();
       return false;
     }

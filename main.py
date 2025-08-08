@@ -52,25 +52,20 @@ origins = [
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    allow_origins=["https://quainexai.onrender.com"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
-# Add your production frontend URL(s) here when you deploy to Render:
-# Example: production_origins.append("https://your-quainex-app-frontend.onrender.com")
 
 
-# ---------- Database Setup ---------- #
-# Use DATABASE_URL for Render (PostgreSQL) and fallback to SQLite for local development
-# Corrected: os.getenv takes the ENV VAR name as first arg, not the URL itself.
+
 SQLALCHEMY_DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./users.db")
-# Add SSL mode if using Render PostgreSQL
+
 if "render.com" in SQLALCHEMY_DATABASE_URL:
     SQLALCHEMY_DATABASE_URL += "?sslmode=require"
 
-# For PostgreSQL, ensure you have 'psycopg2-binary' installed in requirements.txt
-# For SQLite, 'sqlite:///./users.db' will create a file in your project directory
+
 engine = create_engine(SQLALCHEMY_DATABASE_URL) 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
