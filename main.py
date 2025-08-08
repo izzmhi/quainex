@@ -5,8 +5,7 @@ from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from passlib.context import CryptContext
 from jose import JWTError, jwt
 from sqlalchemy import create_engine, Column, Integer, String, DateTime, ForeignKey
-from sqlalchemy.orm import sessionmaker, Session, relationship
-from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker, Session, relationship, declarative_base
 from dotenv import load_dotenv
 from pydantic import BaseModel
 import os
@@ -66,6 +65,9 @@ app.add_middleware(
 # Use DATABASE_URL for Render (PostgreSQL) and fallback to SQLite for local development
 # Corrected: os.getenv takes the ENV VAR name as first arg, not the URL itself.
 SQLALCHEMY_DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./users.db")
+# Add SSL mode if using Render PostgreSQL
+if "render.com" in SQLALCHEMY_DATABASE_URL:
+    SQLALCHEMY_DATABASE_URL += "?sslmode=require"
 
 # For PostgreSQL, ensure you have 'psycopg2-binary' installed in requirements.txt
 # For SQLite, 'sqlite:///./users.db' will create a file in your project directory
@@ -275,14 +277,14 @@ def login_with_cookie(form: OAuth2PasswordRequestForm = Depends(), db: Session =
     access_token = create_access_token(data={"sub": user.username}, expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
     
     response = Response(content="Login successful", media_type="text/plain")
-   response.set_cookie(
-    key="access_token",
-    value=access_token,
-    httponly=True,
-    samesite="Lax",
-    secure=True,
-    max_age=1800 
-)
+    response.set_cookie(
+        key="access_token",
+        value=access_token,
+        httponly=True,
+        samesite="Lax",  # Or "None" if using cross-site
+        secure=True,      # True for production (HTTPS)
+        max_age=1800      # 30 minutes expiration
+    )
     return response
 
 @app.post("/logout")
