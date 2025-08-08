@@ -120,14 +120,15 @@ loginForm.addEventListener("submit", async (e) => {
     formData.append('username', username);
     formData.append('password', password);
 
-    const loginRes = await fetch(`${backendBaseUrl}/token-cookie`, {
+   const loginRes = await fetch(`${backendBaseUrl}/token-cookie`, {
       method: "POST",
       headers: {
         "Content-Type": "application/x-www-form-urlencoded",
       },
       credentials: "include",
-      body: formData
+      body: formData // Correctly sends URL-encoded form data
     });
+
 
     if (!loginRes.ok) {
       const error = await loginRes.json().catch(() => ({ detail: "Invalid credentials" }));
