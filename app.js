@@ -63,7 +63,9 @@ async function fetchMe() {
     const res = await fetch(`${backendBaseUrl}/me`, {
       credentials: "include",
       headers: {
-        "Cache-Control": "no-store"  // More aggressive cache control
+        "Cache-Control": "no-store",
+        "SameSite": "None",  // Explicit SameSite header
+        "Secure": "true"     // Explicit Secure header
       }
     });
     

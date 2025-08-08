@@ -281,7 +281,7 @@ def login_with_cookie(form: OAuth2PasswordRequestForm = Depends(), db: Session =
         key="access_token",
         value=access_token,
         httponly=True,
-        samesite="None",
+        samesite="none",
         secure=True,
         max_age=1800,
         domain=".onrender.com",
