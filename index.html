@@ -89,17 +89,23 @@
     </main>
 
     <!-- Login Screen -->
-    <div id="login-screen" class="fixed inset-0 bg-gray-900 flex items-center justify-center z-50">
-      <form id="login-form" class="bg-gray-800 p-6 rounded-lg shadow-lg w-full max-w-sm space-y-4">
-        <h2 class="text-xl font-semibold text-center text-green-400">Welcome to Quainex</h2>
-        <input id="username" type="text" placeholder="Username" class="w-full px-4 py-2 rounded bg-gray-700 text-white" required />
-        <input id="password" type="password" placeholder="Password" class="w-full px-4 py-2 rounded bg-gray-700 text-white" required />
-        <div class="flex justify-between">
-          <button type="submit" class="bg-green-500 hover:bg-green-600 px-4 py-2 rounded w-full">Login</button>
-          <button type="button" id="signup-btn" class="ml-2 px-4 py-2 rounded w-full bg-blue-500 hover:bg-blue-600">Signup</button>
-        </div>
-      </form>
+<div id="login-screen" class="fixed inset-0 bg-gray-900 flex items-center justify-center z-50">
+  <form id="login-form" class="bg-gray-800 p-6 rounded-lg shadow-lg w-full max-w-sm space-y-4">
+    <h2 class="text-xl font-semibold text-center text-green-400">Welcome to Quainex</h2>
+    <input id="username" type="text" placeholder="Username" class="w-full px-4 py-2 rounded bg-gray-700 text-white" required />
+    <input id="password" type="password" placeholder="Password" class="w-full px-4 py-2 rounded bg-gray-700 text-white" required />
+    
+    <!-- Add the loading indicator here -->
+    <div id="login-loading" class="hidden text-center py-2">
+      <i class="fas fa-spinner fa-spin"></i> Processing...
     </div>
+    
+    <div class="flex justify-between">
+      <button type="submit" class="bg-green-500 hover:bg-green-600 px-4 py-2 rounded w-full">Login</button>
+      <button type="button" id="signup-btn" class="ml-2 px-4 py-2 rounded w-full bg-blue-500 hover:bg-blue-600">Signup</button>
+    </div>
+  </form>
+</div>
 
     <script>
       window.BACKEND_URL = "https://quainex.onrender.com";

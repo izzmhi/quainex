@@ -49,8 +49,9 @@ app = FastAPI()
 # For local development, you might use ["http://localhost:3000"] or similar.
 # For Render deployment, replace with your actual frontend URL(s), e.g., ["https://your-quainex-app-frontend.onrender.com"]
 origins = [
-    "http://127.0.0.1:5500",      # <-- Add your local frontend URL here
-    "https://quainex.onrender.com"  # Your deployed backend URL
+    "http://127.0.0.1:5500",
+    "https://quainex.onrender.com",
+    "https://your-frontend-domain.com"  # Add your actual frontend domain here
 ]
 
 app.add_middleware(
@@ -277,13 +278,14 @@ def login_with_cookie(form: OAuth2PasswordRequestForm = Depends(), db: Session =
     access_token = create_access_token(data={"sub": user.username}, expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
     
     response = Response(content="Login successful", media_type="text/plain")
-    response.set_cookie(
-        key="access_token",
-        value=access_token,
-        httponly=True,
-        samesite="Lax",
-        secure=False,
-    )
+   response.set_cookie(
+    key="access_token",
+    value=access_token,
+    httponly=True,
+    samesite="Lax",
+    secure=True,
+    max_age=1800 
+)
     return response
 
 @app.post("/logout")

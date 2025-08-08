@@ -85,45 +85,59 @@ async function fetchMe() {
 // ---------- Login ----------
 loginForm.addEventListener("submit", async (e) => {
   e.preventDefault();
+  const loginLoading = document.getElementById("login-loading");
+  loginLoading.classList.remove("hidden");
+  
   const username = usernameInput.value.trim();
   const password = passwordInput.value.trim();
   if (!username || !password) {
     showCustomMessage("Please enter username and password.");
+    loginLoading.classList.add("hidden");
     return;
   }
 
   try {
-    // Call the /token-cookie endpoint to get an HttpOnly cookie
     const res = await fetch(`${backendBaseUrl}/token-cookie`, {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: `username=${encodeURIComponent(
-        username
-      )}&password=${encodeURIComponent(password)}`,
+      credentials: "include",
+      body: `username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`,
     });
 
     if (res.ok) {
-      currentUser = username;
-      localStorage.setItem("quainex_user", currentUser); // Store username for display
-      updateUserAvatar(currentUser); // Update avatar on successful login
-      showChat();
-      showCustomMessage("Login successful!");
+      const sessionVerified = await fetchMe();
+      if (sessionVerified) {
+        currentUser = username;
+        localStorage.setItem("quainex_user", currentUser);
+        updateUserAvatar(currentUser);
+        showChat();
+        showCustomMessage("Login successful!");
+      } else {
+        showCustomMessage("Login failed: Session could not be verified.");
+      }
     } else {
       const data = await res.json();
       showCustomMessage("Login failed: " + (data.detail || "Invalid credentials"));
+      passwordInput.value = "";
     }
   } catch (error) {
     console.error("Login error:", error);
-    showCustomMessage("Login error. Please check backend connection.");
+    showCustomMessage("Login error. Please check the connection.");
+    passwordInput.value = "";
+  } finally {
+    loginLoading.classList.add("hidden");
   }
 });
-
 // ---------- Signup ----------
 signupBtn.addEventListener("click", async () => {
+  const loginLoading = document.getElementById("login-loading");
+  loginLoading.classList.remove("hidden");
+  
   const username = usernameInput.value.trim();
   const password = passwordInput.value.trim();
   if (!username || !password) {
     showCustomMessage("Please enter username and password.");
+    loginLoading.classList.add("hidden");
     return;
   }
 
@@ -131,21 +145,26 @@ signupBtn.addEventListener("click", async () => {
     const res = await fetch(`${backendBaseUrl}/signup`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
+      credentials: "include",
       body: JSON.stringify({ username, password }),
     });
 
     if (res.ok) {
       showCustomMessage("Signup successful! Please log in.");
+      passwordInput.value = "";
     } else {
       const data = await res.json();
-      showCustomMessage(data.detail || "Signup failed.");
+      showCustomMessage(data.detail || "Signup failed. Username may be taken.");
+      passwordInput.value = "";
     }
   } catch (error) {
     console.error("Signup error:", error);
-    showCustomMessage("Signup error..");
+    showCustomMessage("Signup error. Please try again.");
+    passwordInput.value = "";
+  } finally {
+    loginLoading.classList.add("hidden");
   }
 });
-
 // ---------- Logout ----------
 logoutBtn.addEventListener("click", async () => {
   try {
