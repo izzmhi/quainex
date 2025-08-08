@@ -276,18 +276,18 @@ def login_with_cookie(form: OAuth2PasswordRequestForm = Depends(), db: Session =
     )
     
     response = Response(content="Login successful", media_type="text/plain")
-# In your /token-cookie endpoint (main.py)
-response.set_cookie(
-    key="access_token",
-    value=access_token,
-    httponly=True,
-    samesite="none",
-    secure=True,
-    max_age=1800,
-    domain=".onrender.com",  # Note the leading dot for subdomains
-    path="/",
-    partitioned=True  # Important for cross-site cookies
-)
+    response.set_cookie(
+        key="access_token",
+        value=access_token,
+        httponly=True,
+        samesite="none",
+        secure=True,
+        max_age=1800,
+        domain=".onrender.com",  # Note the leading dot for subdomains
+        path="/",
+        partitioned=True  # Important for cross-site cookies
+    )
+    return response # You must return the response object with the cookie
 
 @app.post("/logout")
 def logout(response: Response):
