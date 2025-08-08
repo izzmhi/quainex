@@ -1,12 +1,5 @@
 // app.js
 // ---------- DOM References ----------
-const loginScreen = document.getElementById("login-screen");
-const chatScreen = document.getElementById("chat-screen");
-const loginForm = document.getElementById("login-form");
-const usernameInput = document.getElementById("username");
-const passwordInput = document.getElementById("password");
-const signupBtn = document.getElementById("signup-btn");
-const logoutBtn = document.getElementById("logout-btn");
 const toggleDark = document.getElementById("toggle-dark");
 const chatForm = document.getElementById("chat-form");
 const userInput = document.getElementById("user-input");
@@ -17,14 +10,14 @@ const voiceBtn = document.getElementById("voice-btn");
 const providerSelect = document.getElementById("provider-select");
 const ttsBtn = document.getElementById("tts-btn");
 const imgGenBtn = document.getElementById("img-gen-btn");
-const mobileMenuBtn = document.getElementById("mobile-menu-btn"); // New mobile menu button
-const sidebar = document.querySelector("aside"); // Reference to the sidebar
-const mainSection = document.querySelector("section.flex-1"); // Reference to the main content section
-const userAvatar = document.getElementById("user-avatar"); // Reference to the user avatar image
+const mobileMenuBtn = document.getElementById("mobile-menu-btn");
+const sidebar = document.querySelector("aside");
+const mainSection = document.querySelector("section.flex-1");
+const userAvatar = document.getElementById("user-avatar");
 
 // ---------- Global Variables ----------
 let currentTool = "chat";
-let currentUser = null; // Stored for display purposes, not for authentication
+let currentUser = "guest";
 let mediaRecorder,
   audioChunks = [];
 let audio = new Audio();
@@ -33,28 +26,10 @@ let audio = new Audio();
 const backendBaseUrl = window.BACKEND_URL;
 
 // ---------- Init ----------
-async function init() {
-  currentUser = localStorage.getItem("quainex_user");
+function init() {
   const provider = localStorage.getItem("provider") || "openrouter";
   providerSelect.value = provider;
-
-  if (currentUser) {
-    try {
-      const sessionValid = await fetchMe();
-      if (sessionValid) {
-        showChat();
-        updateUserAvatar(currentUser);
-      } else {
-        localStorage.removeItem("quainex_user");
-        loginScreen.classList.remove("hidden");
-      }
-    } catch (error) {
-      console.error("Init error:", error);
-      loginScreen.classList.remove("hidden");
-    }
-  } else {
-    loginScreen.classList.remove("hidden");
-  }
+  updateUserAvatar(currentUser);
 }
 
 function updateUserAvatar(username) {
@@ -65,162 +40,10 @@ function updateUserAvatar(username) {
   }
 }
 
-// Fetches user details to verify session via cookie
-// Fetches user details to verify session via cookie
-async function fetchMe() {
-  try {
-    const res = await fetch(`${backendBaseUrl}/me`, {
-      credentials: "include",
-      headers: { "Cache-Control": "no-store" }
-    });
-    
-    if (!res.ok) {
-      const errorText = await res.text();
-      console.error("Session verification failed:", res.status, errorText);
-      handleTokenExpiry();
-      return false;
-    }
-    const user = await res.json();
-    currentUser = user.username;
-    localStorage.setItem("quainex_user", currentUser);
-    updateUserAvatar(currentUser);
-    console.log("Session verified for user:", currentUser);
-    return true;
-  } catch (error) {
-    console.error("Error fetching user details:", error);
-    handleTokenExpiry();
-    return false;
-  }
-}
-
-// ---------- Login ----------
-loginForm.addEventListener("submit", async (e) => {
-  e.preventDefault();
-  const loginLoading = document.getElementById("login-loading");
-  loginLoading.classList.remove("hidden");
-  
-  const username = usernameInput.value.trim();
-  const password = passwordInput.value.trim();
-  
-  if (!username || !password) {
-    showCustomMessage("Please enter username and password.");
-    loginLoading.classList.add("hidden");
-    return;
-  }
-
-  try {
-    // Clear existing session first
-    await fetch(`${backendBaseUrl}/logout`, {
-      method: "POST",
-      credentials: "include"
-    });
-
-    // Attempt login with URL-encoded form data
-    const formData = new URLSearchParams();
-    formData.append('username', username);
-    formData.append('password', password);
-
-   const loginRes = await fetch(`${backendBaseUrl}/token-cookie`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
-      },
-      credentials: "include",
-      body: formData // Correctly sends URL-encoded form data
-    });
-
-
-    if (!loginRes.ok) {
-      const error = await loginRes.json().catch(() => ({ detail: "Invalid credentials" }));
-      showCustomMessage("Login failed: " + (error.detail || "Invalid credentials"));
-      passwordInput.value = "";
-      return;
-    }
-
-    // Verify session
-    const sessionVerified = await fetchMe();
-    if (sessionVerified) {
-      currentUser = username;
-      localStorage.setItem("quainex_user", currentUser);
-      updateUserAvatar(currentUser);
-      showChat();
-      showCustomMessage("Login successful!");
-    } else {
-      showCustomMessage("Session verification failed. Please try again.");
-    }
-  } catch (error) {
-    console.error("Login error:", error);
-    showCustomMessage("Login error. Please check the connection.");
-  } finally {
-    loginLoading.classList.add("hidden");
-  }
-});
-
-// ---------- Signup ----------
-signupBtn.addEventListener("click", async () => {
-  const loginLoading = document.getElementById("login-loading");
-  loginLoading.classList.remove("hidden");
-  
-  const username = usernameInput.value.trim();
-  const password = passwordInput.value.trim();
-  if (!username || !password) {
-    showCustomMessage("Please enter username and password.");
-    loginLoading.classList.add("hidden");
-    return;
-  }
-
-  try {
-    const res = await fetch(`${backendBaseUrl}/signup`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify({ username, password }),
-    });
-
-    if (res.ok) {
-      showCustomMessage("Signup successful! Please log in.");
-      passwordInput.value = "";
-    } else {
-      const data = await res.json();
-      showCustomMessage(data.detail || "Signup failed. Username may be taken.");
-      passwordInput.value = "";
-    }
-  } catch (error) {
-    console.error("Signup error:", error);
-    showCustomMessage("Signup error. Please try again.");
-    passwordInput.value = "";
-  } finally {
-    loginLoading.classList.add("hidden");
-  }
-});
-// ---------- Logout ----------
-logoutBtn.addEventListener("click", async () => {
-  try {
-    // Call the /logout endpoint to clear the HttpOnly cookie
-    await fetch(`${backendBaseUrl}/logout`, {
-      method: "POST",
-      credentials: "include", // ADD THIS LINE for logout
-    });
-  } catch (error) {
-    console.error("Logout error:", error);
-  }
-  localStorage.clear(); // Clear any local storage data
-  location.reload(); // Reload the page to show login screen
-});
-
-// ---------- Show Chat Screen ----------
-function showChat() {
-  loginScreen.classList.add("hidden");
-  chatScreen.classList.remove("hidden");
-  logoutBtn.classList.remove("hidden");
-  loadHistoryOnce();
-}
-
 // ---------- Tool Switching ----------
 toolBtns.forEach((btn) => {
-  btn.addEventListener("click", async () => {
+  btn.addEventListener("click", () => {
     currentTool = btn.dataset.tool;
-    // Assuming toolStatus exists in index.html
     const toolStatusElement = document.getElementById("tool-status");
     if (toolStatusElement) {
       toolStatusElement.textContent = `Tool: ${currentTool}`;
@@ -252,14 +75,9 @@ chatForm.addEventListener("submit", async (e) => {
       headers: {
         "Content-Type": "application/json",
       },
-      credentials: "include", // ADD THIS LINE
       body: JSON.stringify(body),
     });
 
-    if (res.status === 401) {
-      handleTokenExpiry();
-      return;
-    }
     const data = await res.json();
     loader.remove();
     appendMessage("Quainex", data.response, "bot");
@@ -275,7 +93,6 @@ function showTyping(el) {
   let dots = 0;
   const interval = setInterval(() => {
     if (!el || !el.isConnected) {
-      // Check if element is still in DOM
       clearInterval(interval);
       return;
     }
@@ -307,15 +124,13 @@ function appendMessage(
     typing.textContent = "...";
     bubble.appendChild(typing);
   } else if (isImage) {
-    // Safely create and append an image element
     const imgElement = document.createElement("img");
-    imgElement.src = text; // The 'text' here is actually the image URL
+    imgElement.src = text;
     imgElement.alt = "Generated Image";
     imgElement.className =
       "rounded-lg shadow-md mt-2 w-full max-w-xs md:max-w-sm lg:max-w-md";
     bubble.appendChild(imgElement);
   } else {
-    // Use textContent for plain text to prevent XSS
     bubble.textContent = text;
   }
 
@@ -323,31 +138,6 @@ function appendMessage(
   chatBox.appendChild(wrapper);
   chatBox.scrollTop = chatBox.scrollHeight;
   return wrapper;
-}
-
-// ---------- Load History Once ----------
-let historyLoaded = false;
-async function loadHistoryOnce() {
-  if (historyLoaded) return;
-  historyLoaded = true;
-
-  try {
-    const res = await fetch(`${backendBaseUrl}/history`, {
-      credentials: "include", //
-    });
-    if (res.status === 401) {
-      handleTokenExpiry();
-      return;
-    }
-    const data = await res.json();
-    data.messages.forEach((m) => {
-      appendMessage("You", m.user, "user");
-      appendMessage("Quainex", m.bot, "bot");
-    });
-  } catch (error) {
-    console.error("Failed to load history:", error);
-    appendMessage("Quainex", "⚠️ Failed to load history.", "bot");
-  }
 }
 
 // ---------- Text-to-Speech ----------
@@ -367,14 +157,9 @@ ttsBtn.addEventListener("click", async () => {
     const res = await fetch(`${backendBaseUrl}/tts`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      credentials: "include", // ADD THIS LINE
       body: JSON.stringify({ text: message }),
     });
 
-    if (res.status === 401) {
-      handleTokenExpiry();
-      return;
-    }
     const data = await res.blob();
     loader.remove();
 
@@ -406,19 +191,13 @@ imgGenBtn.addEventListener("click", async () => {
     const res = await fetch(`${backendBaseUrl}/image-generation`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      credentials: "include",
       body: JSON.stringify({ prompt: message }),
     });
 
-    if (res.status === 401) {
-      handleTokenExpiry();
-      return;
-    }
     const data = await res.json();
     loader.remove();
 
     if (data.image_url) {
-      // Safely append the image without using innerHTML
       appendMessage("Quainex", data.image_url, "bot", false, true);
     } else {
       appendMessage("Quainex", data.output, "bot");
@@ -453,13 +232,9 @@ voiceBtn.addEventListener("click", async () => {
       try {
         const res = await fetch(`${backendBaseUrl}/voice`, {
           method: "POST",
-          credentials: "include", // ADD THIS LINE
-          body: formData, // No Content-Type header needed for FormData
+          body: formData,
         });
-        if (res.status === 401) {
-          handleTokenExpiry();
-          return;
-        }
+
         const data = await res.json();
         loader.remove();
         appendMessage("Quainex", data.response, "bot");
@@ -481,14 +256,13 @@ voiceBtn.addEventListener("click", async () => {
 // ---------- Mobile Menu Toggle ----------
 mobileMenuBtn.addEventListener("click", () => {
   sidebar.classList.toggle("hidden");
-  sidebar.classList.toggle("flex"); // Add flex for mobile view
-  // Adjust main section width based on sidebar visibility
+  sidebar.classList.toggle("flex");
   if (sidebar.classList.contains("hidden")) {
-    mainSection.classList.remove("md:w-auto"); // Remove fixed width
-    mainSection.classList.add("w-full"); // Take full width
+    mainSection.classList.remove("md:w-auto");
+    mainSection.classList.add("w-full");
   } else {
     mainSection.classList.remove("w-full");
-    mainSection.classList.add("md:w-auto"); // Re-add fixed width for larger screens
+    mainSection.classList.add("md:w-auto");
   }
 });
 
@@ -502,20 +276,8 @@ providerSelect.addEventListener("change", () => {
   localStorage.setItem("provider", providerSelect.value);
 });
 
-// ---------- Token Expiry (Custom Message) ----------
-function handleTokenExpiry() {
-  showCustomMessage("🔒 Session expired. Please log in again.");
-  localStorage.clear();
-  // Small delay before reloading to allow user to read message
-  setTimeout(() => {
-    location.reload();
-  }, 1500);
-}
-
 // ---------- Custom Message Display (instead of alert) ----------
 function showCustomMessage(message) {
-  // For simplicity
-  // In a real app, you'd implement a proper modal or toast notification system.
   const messageDiv = document.createElement("div");
   messageDiv.className =
     "fixed top-4 right-4 bg-blue-600 text-white px-4 py-2 rounded-lg shadow-lg z-[1000]";
@@ -524,7 +286,7 @@ function showCustomMessage(message) {
 
   setTimeout(() => {
     messageDiv.remove();
-  }, 3000); // Message disappears after 3 seconds
+  }, 3000);
 }
 
 // ---------- Run Init ----------
