@@ -202,7 +202,7 @@ def init_db():
     return conn
 
 _db_conn = init_db()
-_db_cursor = db_conn.cursor()
+_db_cursor = _db_conn.cursor()
 
 def log_chat_db(user_message: str, final_provider: str, ai_response: str,
                 provider_requested: str, candidates: List[Dict[str, Any]], personality: str):
@@ -213,7 +213,7 @@ def log_chat_db(user_message: str, final_provider: str, ai_response: str,
             "INSERT INTO chats (timestamp, provider_requested, final_provider, user_message, ai_response, response_candidates, personality) VALUES (?, ?, ?, ?, ?, ?, ?)",
             (timestamp, provider_requested, final_provider, user_message, ai_response, json.dumps(candidates, ensure_ascii=False), personality)
         )
-        db_conn.commit()
+        _db_conn.commit()
     except Exception as e:
         logger.exception("Failed to write chat log to DB: %s", e)
 
