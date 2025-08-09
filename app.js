@@ -1,6 +1,6 @@
 // ---------- DOM References ----------
 const chatForm = document.getElementById("chat-form");
-const userInput = document.getElementById("chat-input");
+const chatInput = document.getElementById("chat-input"); // fixed ID to match index.html
 const chatBox = document.getElementById("chat-box");
 const voiceBtn = document.getElementById("voice-btn");
 const providerSelect = document.getElementById("provider-select");
@@ -21,15 +21,12 @@ let currentUser = "guest";
 let mediaRecorder,
   audioChunks = [];
 let audio = new Audio();
-
-// IMPORTANT: Set backend URL to your Render backend
-const backendBaseUrl = "https://quainex.onrender.com";
+const backendBaseUrl = window.BACKEND_URL || "https://quainex.onrender.com";
 
 // ---------- Init ----------
 function init() {
-  // Remove any existing listeners to prevent duplicates
-  console.log("handleFormSubmit fired!");
-  console.log("init() starting...");
+  console.log("[Init] Starting...");
+  // Remove existing listeners to avoid duplicates
   chatForm.removeEventListener("submit", handleFormSubmit);
   voiceBtn.removeEventListener("click", handleVoiceInput);
   mobileMenuBtn.removeEventListener("click", toggleSidebar);
@@ -40,7 +37,7 @@ function init() {
   const provider = localStorage.getItem("provider") || "openrouter";
   providerSelect.value = provider;
   updateUserAvatar(currentUser);
-  
+
   // Set up event listeners
   setupEventListeners();
 }
@@ -60,70 +57,58 @@ function updateUserAvatar(username) {
 
 // ---------- Event Listeners Setup ----------
 function setupEventListeners() {
-    console.log("setupEventListeners called, attaching submit handler");
+  console.log("[Setup] Attaching event listeners...");
 
-    document.getElementById("chat-form")
-        .addEventListener("submit", handleFormSubmit);
-  // Voice button
+  chatForm.addEventListener("submit", handleFormSubmit);
   voiceBtn.addEventListener("click", handleVoiceInput);
-  
-  // Sidebar buttons
+
   newChatBtn.addEventListener("click", handleNewChat);
   searchBtn.addEventListener("click", handleSearch);
   settingsBtn.addEventListener("click", handleSettings);
-  
-  // Sidebar toggle
+
   mobileMenuBtn.addEventListener("click", toggleSidebar);
   overlay.addEventListener("click", toggleSidebar);
-  
-  // Provider change
+
   providerSelect.addEventListener("change", handleProviderChange);
-  
-  // Auto-resize textarea
-  userInput.addEventListener("input", () => {
-    userInput.style.height = 'auto';
-    userInput.style.height = userInput.scrollHeight + 'px';
+
+  chatInput.addEventListener("input", () => {
+    chatInput.style.height = "auto";
+    chatInput.style.height = chatInput.scrollHeight + "px";
   });
 }
 
 // ---------- Form Submission Handler ----------
 async function handleFormSubmit(e) {
-  e.preventDefault();
+  e.preventDefault(); // stop page reload
   e.stopPropagation();
-  e.stopImmediatePropagation();
 
-  const message = userInput.value.trim();
+  const message = chatInput.value.trim();
   if (!message) return;
 
-  // disable submit button while request is in-flight
+  console.log("[FormSubmit] Sending message:", message);
+
   const submitBtn = chatForm.querySelector('button[type="submit"]');
   if (submitBtn) {
     submitBtn.disabled = true;
-    submitBtn.classList.add('opacity-50', 'cursor-not-allowed');
+    submitBtn.classList.add("opacity-50", "cursor-not-allowed");
   }
 
-  console.log("Preparing to send message:", message);
-
-  // Hide welcome and show chat when first message sent
   if (welcomeScreen.style.display !== "none") {
     welcomeScreen.style.display = "none";
     chatBox.classList.remove("hidden");
   }
 
   appendMessage("You", message, "user");
-  userInput.value = "";
-  userInput.style.height = "auto";
+  chatInput.value = "";
+  chatInput.style.height = "auto";
 
   const loader = appendMessage("Quainex", "...", "bot", true);
   showTyping(loader.querySelector(".typing"));
 
   try {
-    console.log("Sending request to backend...");
-    
-    // <-- IMPORTANT: await and assign response
     const response = await fetch(`${backendBaseUrl}/api/chat`, {
       method: "POST",
-      headers: { 
+      headers: {
         "Content-Type": "application/json",
         "Accept": "application/json"
       },
@@ -135,21 +120,18 @@ async function handleFormSubmit(e) {
       credentials: "include"
     });
 
-    console.log("Received response status:", response.status);
+    console.log("[FormSubmit] Response status:", response.status);
 
-    // handle non-JSON or error bodies gracefully
     if (!response.ok) {
       let errorData = {};
       try {
         errorData = await response.json();
-      } catch (_) {
-        // not JSON
-      }
-      throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+      } catch {}
+      throw new Error(errorData.error || `HTTP error ${response.status}`);
     }
 
     const data = await response.json();
-    console.log("Response data:", data);
+    console.log("[FormSubmit] Response data:", data);
 
     loader.remove();
 
@@ -159,20 +141,22 @@ async function handleFormSubmit(e) {
       throw new Error("Invalid response format from server");
     }
   } catch (error) {
-    console.error("Chat error:", error);
-    try { loader.remove(); } catch (e) {}
-    appendMessage("Quainex", `⚠️ Error: ${error.message || "Please try again later"}`, "bot");
+    console.error("[FormSubmit] Chat error:", error);
+    loader.remove();
+    appendMessage(
+      "Quainex",
+      `⚠️ Error: ${error.message || "Please try again later"}`,
+      "bot"
+    );
   } finally {
-    // re-enable submit button
     if (submitBtn) {
       submitBtn.disabled = false;
-      submitBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+      submitBtn.classList.remove("opacity-50", "cursor-not-allowed");
     }
   }
 }
 
-
-// ---------- Typing Dots Animation ----------
+// ---------- Typing Animation ----------
 function showTyping(el) {
   let dots = 0;
   const interval = setInterval(() => {
@@ -180,22 +164,24 @@ function showTyping(el) {
       clearInterval(interval);
       return;
     }
-    el.textContent = ".".repeat((dots++ % 4));
+    el.textContent = ".".repeat(dots++ % 4);
   }, 300);
 }
 
-// ---------- Append Message to Chat ----------
+// ---------- Append Message ----------
 function appendMessage(sender, text, type = "bot", loading = false) {
   const wrapper = document.createElement("div");
-  wrapper.className = `flex ${type === "user" ? "justify-end" : "justify-start"} fade-in`;
-  
+  wrapper.className = `flex ${
+    type === "user" ? "justify-end" : "justify-start"
+  } fade-in`;
+
   const bubble = document.createElement("div");
   bubble.className = `px-5 py-3 rounded-2xl shadow max-w-[90%] md:max-w-[80%] whitespace-pre-wrap ${
     type === "user"
       ? "bg-primary-600 text-white rounded-br-none user-bubble"
       : "bg-dark-700 text-white rounded-bl-none bot-bubble"
   }`;
-  
+
   const senderElement = document.createElement("div");
   senderElement.className = `text-xs font-semibold mb-1 ${
     type === "user" ? "text-primary-200" : "text-gray-400"
@@ -221,7 +207,7 @@ function appendMessage(sender, text, type = "bot", loading = false) {
   return wrapper;
 }
 
-// ---------- Voice Input Handler ----------
+// ---------- Voice Input ----------
 async function handleVoiceInput() {
   if (mediaRecorder && mediaRecorder.state === "recording") {
     mediaRecorder.stop();
@@ -240,23 +226,27 @@ async function handleVoiceInput() {
       formData.append("file", audioBlob);
       const loader = appendMessage("Quainex", "Transcribing voice...", "bot", true);
       try {
-        const res = await fetch(`${backendBaseUrl}/voice`, { 
-          method: "POST", 
+        const res = await fetch(`${backendBaseUrl}/voice`, {
+          method: "POST",
           body: formData,
           credentials: "include"
         });
-        
+
         if (!res.ok) {
           throw new Error(`Voice transcription failed: ${res.status}`);
         }
-        
+
         const data = await res.json();
         loader.remove();
         appendMessage("Quainex", data.response, "bot");
       } catch (error) {
-        console.error("Voice transcription error:", error);
+        console.error("[VoiceInput] Error:", error);
         loader.remove();
-        appendMessage("Quainex", "⚠️ Voice transcription failed. Please try again.", "bot");
+        appendMessage(
+          "Quainex",
+          "⚠️ Voice transcription failed. Please try again.",
+          "bot"
+        );
       }
     };
     mediaRecorder.start();
@@ -264,7 +254,7 @@ async function handleVoiceInput() {
     voiceBtn.classList.add("text-red-500");
     showCustomMessage("Recording... Click again to stop");
   } catch (error) {
-    console.error("Error accessing microphone:", error);
+    console.error("[VoiceInput] Microphone access denied:", error);
     showCustomMessage("Microphone access denied: " + error.message);
   }
 }
@@ -296,16 +286,19 @@ function toggleSidebar() {
   overlay.classList.toggle("active");
 }
 
-// ---------- Provider Change Handler ----------
+// ---------- Provider Change ----------
 function handleProviderChange() {
   localStorage.setItem("provider", providerSelect.value);
-  showCustomMessage(`Model provider set to ${providerSelect.options[providerSelect.selectedIndex].text}`);
+  showCustomMessage(
+    `Model provider set to ${providerSelect.options[providerSelect.selectedIndex].text}`
+  );
 }
 
-// ---------- Custom Message Display ----------
+// ---------- Custom Message ----------
 function showCustomMessage(message) {
   const messageDiv = document.createElement("div");
-  messageDiv.className = "fixed top-4 right-4 bg-primary-600 text-white px-4 py-2 rounded-lg shadow-lg z-[1000] flex items-center space-x-2 fade-in";
+  messageDiv.className =
+    "fixed top-4 right-4 bg-primary-600 text-white px-4 py-2 rounded-lg shadow-lg z-[1000] flex items-center space-x-2 fade-in";
   const icon = document.createElement("i");
   icon.className = "fas fa-info-circle";
   messageDiv.appendChild(icon);
@@ -321,7 +314,5 @@ function showCustomMessage(message) {
   }, 3000);
 }
 
-document.addEventListener("DOMContentLoaded", function() {
-    console.log("init() starting...");
-    setupEventListeners();
-});
+// ---------- Start App ----------
+document.addEventListener("DOMContentLoaded", init);
