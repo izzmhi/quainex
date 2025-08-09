@@ -42,7 +42,6 @@ API_KEYS = {
     "supabasekey": os.getenv("SUPABASE_KEY")
 }
 
-}
 
 # Now initialize Supabase client with actual keys
 SUPABASE_URL = API_KEYS["supabaseurl"]
