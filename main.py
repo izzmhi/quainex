@@ -34,6 +34,7 @@ API_KEYS = {
     "gemini": os.getenv("GEMINI_API_KEY"),
     "elevenlabs": os.getenv("ELEVENLABS_API_KEY"),
     "serper": os.getenv("SERPER_API_KEY")
+    "deepseek": os.getenv("DEEPSEEK_API_KEY")
 }
 
 # Clients (third-party SDKs if available)
@@ -44,7 +45,8 @@ clients = {
 
 # Constants
 DEFAULT_MAX_TOKENS = 500
-PROVIDER_FALLBACK_ORDER = ["openrouter", "together", "gemini", "groq"]
+PROVIDER_FALLBACK_ORDER = ["openrouter", "together", "gemini", "groq", "deepseek"]
+
 
 # ---------- FastAPI App ----------
 app = FastAPI(
@@ -91,12 +93,12 @@ class ChatRequest(BaseModel):
 class ToolRequest(BaseModel):
     tool: str
     content: str
-    provider: str = "openrouter"
+    provider: str = "deepseek"
     options: Optional[dict] = None
 
 class SearchRequest(BaseModel):
     query: str
-    provider: str = "openrouter"
+    provider: str = "deepseek"
     num_results: int = 5
 
 class TTSRequest(BaseModel):
@@ -131,7 +133,7 @@ PERSONALITIES = {
         "6. If applicable, include architecture diagrams in ASCII format. "
         "7. Avoid generic theory-only answers; all responses must be implementation-ready."
     )
-}
+},
 
     "strict": {
         "name": "Technical Expert (concise)",
@@ -294,7 +296,12 @@ async def query_provider_once(provider_key: str, messages: list, timeout: int = 
             "url": f"https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key={API_KEYS.get('gemini')}",
             "model": "gemini-pro",
             "headers": {"Content-Type": "application/json"}
-        }
+        },
+            "deepseek": {
+        "url": "https://api.deepseek.com/chat/completions",
+        "model": "deepseek-chat",
+        "headers": {"Authorization": f"Bearer {API_KEYS.get('deepseek')}"}
+    }
     }
 
     if provider_key not in endpoints:
