@@ -340,7 +340,7 @@ async def query_provider_once(provider_key: str, messages: list, timeout: int = 
         "maxOutputTokens": max_tokens
         }
     else:
-    payload = {
+        payload = {
         "model": cfg["model"],
         "messages": messages,
         "temperature": 0.3 if provider_key == "deepseek" else 0.7,
