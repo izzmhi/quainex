@@ -85,7 +85,6 @@ function setupEventListeners() {
 
 // ---------- Form Submission Handler ----------
 async function handleFormSubmit(e) {
-  // Completely prevent default form behavior
   e.preventDefault();
   e.stopPropagation();
   e.stopImmediatePropagation();
@@ -93,7 +92,7 @@ async function handleFormSubmit(e) {
   const message = userInput.value.trim();
   if (!message) return;
 
-  console.log("Preparing to send message:", message); // Debug log
+  console.log("Preparing to send message:", message);
 
   // Hide the welcome screen and show the chat box if it's the first message
   if (welcomeScreen.style.display !== "none") {
@@ -108,7 +107,7 @@ async function handleFormSubmit(e) {
   showTyping(loader.querySelector(".typing"));
 
   try {
-    console.log("Sending request to backend..."); // Debug log
+    console.log("Sending request to backend...");
     
     const response = await fetch(`${backendBaseUrl}/api/chat`, {
       method: "POST",
@@ -123,8 +122,8 @@ async function handleFormSubmit(e) {
       }),
       credentials: "include"
     });
-
-    console.log("Received response status:", response.status); // Debug log
+    
+    console.log("Received response status:", response.status);
     
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
@@ -134,7 +133,7 @@ async function handleFormSubmit(e) {
     }
 
     const data = await response.json();
-    console.log("Response data:", data); // Debug log
+    console.log("Response data:", data);
     
     loader.remove();
 

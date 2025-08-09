@@ -1,4 +1,3 @@
-# main.py
 from fastapi import FastAPI, Request, HTTPException, status, Response, UploadFile, File, Body
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -16,7 +15,6 @@ import sqlite3
 import json
 from supabase import create_client
 import xml.etree.ElementTree as ET
-import ast
 import re
 from fastapi.encoders import jsonable_encoder
 
@@ -70,11 +68,12 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "https://quainexai.onrender.com",
-        "https://quainex.onrender.com"
+        "https://quainex.onrender.com",
+        "http://localhost:3000"  # For local development
     ],
     allow_credentials=True,
-    allow_methods=["POST", "GET", "OPTIONS"],
-    allow_headers=["Content-Type", "Authorization", "Accept"],
+    allow_methods=["*"],
+    allow_headers=["*"],
     expose_headers=["*"],
     max_age=600
 )
@@ -103,51 +102,6 @@ clients = {
 DEFAULT_MAX_TOKENS = 500
 PROVIDER_FALLBACK_ORDER = ["openrouter", "together", "groq", "deepseek", "gemini"]
 MAX_AGENT_LOOPS = 5
-
-# Add root endpoint
-@app.get("/")
-async def root():
-    return JSONResponse(
-        content={
-            "status": "running",
-            "service": "Quainex AI Backend",
-            "version": "2.1.0",
-            "docs": "/api/docs",
-            "available_endpoints": [
-                "/api/chat",
-                "/voice",
-                "/api/providers",
-                "/health"
-            ]
-        },
-        headers={
-            "Access-Control-Allow-Origin": "https://quainexai.onrender.com",
-            "Access-Control-Allow-Credentials": "true"
-        }
-    )
-
-# Explicit OPTIONS handler for preflight requests
-@app.options("/api/chat")
-async def options_chat():
-    return Response(
-        status_code=status.HTTP_200_OK,
-        headers={
-            "Access-Control-Allow-Origin": "https://quainexai.onrender.com",
-            "Access-Control-Allow-Methods": "POST, OPTIONS",
-            "Access-Control-Allow-Headers": "Content-Type",
-            "Access-Control-Allow-Credentials": "true"
-        }
-    )
-
-# Middleware for request timing
-@app.middleware("http")
-async def add_process_time_header(request: Request, call_next):
-    start_time = datetime.now()
-    response = await call_next(request)
-    process_time = (datetime.now() - start_time).total_seconds()
-    response.headers["X-Response-Time"] = str(process_time)
-    logger.info(f"{request.method} {request.url.path} - {response.status_code} - {process_time:.3f}s")
-    return response
 
 # ---------- Data Models ----------
 class ChatRequest(BaseModel):
@@ -622,7 +576,7 @@ async def chat_endpoint(request: ChatRequest = Body(...)):
                 "time_ms": response_time
             }),
             headers={
-                "Access-Control-Allow-Origin": "https://quainexai.onrender.com",
+                "Access-Control-Allow-Origin": "*",
                 "Access-Control-Allow-Credentials": "true"
             }
         )
@@ -652,7 +606,7 @@ async def voice_endpoint(file: UploadFile = File(...)):
                 "response": "This is a mock response from voice transcription"
             },
             headers={
-                "Access-Control-Allow-Origin": "https://quainexai.onrender.com",
+                "Access-Control-Allow-Origin": "*",
                 "Access-Control-Allow-Credentials": "true"
             }
         )
@@ -675,7 +629,7 @@ async def register_developer(data: DeveloperAPIKey):
             "rate_limit": "100/day"
         },
         headers={
-            "Access-Control-Allow-Origin": "https://quainexai.onrender.com",
+            "Access-Control-Allow-Origin": "*",
             "Access-Control-Allow-Credentials": "true"
         }
     )
@@ -695,7 +649,7 @@ async def list_providers():
             ]
         },
         headers={
-            "Access-Control-Allow-Origin": "https://quainexai.onrender.com",
+            "Access-Control-Allow-Origin": "*",
             "Access-Control-Allow-Credentials": "true"
         }
     )
@@ -715,7 +669,7 @@ async def health_check():
             }
         },
         headers={
-            "Access-Control-Allow-Origin": "https://quainexai.onrender.com",
+            "Access-Control-Allow-Origin": "*",
             "Access-Control-Allow-Credentials": "true"
         }
     )
@@ -731,7 +685,7 @@ async def http_exception_handler(request: Request, exc: HTTPException):
             "code": exc.status_code
         },
         headers={
-            "Access-Control-Allow-Origin": "https://quainexai.onrender.com",
+            "Access-Control-Allow-Origin": "*",
             "Access-Control-Allow-Credentials": "true"
         }
     )
@@ -747,7 +701,7 @@ async def generic_exception_handler(request: Request, exc: Exception):
             "code": 500
         },
         headers={
-            "Access-Control-Allow-Origin": "https://quainexai.onrender.com",
+            "Access-Control-Allow-Origin": "*",
             "Access-Control-Allow-Credentials": "true"
         }
     )
