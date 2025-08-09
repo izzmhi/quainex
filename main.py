@@ -315,12 +315,16 @@ async def query_provider_once(provider_key: str, messages: list, timeout: int = 
         full_text = "\n".join([m.get("content", "") for m in messages])
         payload = {
             "contents": [{"parts": [{"text": full_text}]}],
-            "temperature": 0.7,
-            "maxOutputTokens": max_tokens
+            "temperature": 0.3 if provider_key == "deepseek" else 0.7,
+        "maxOutputTokens": max_tokens
         }
     else:
-        payload = {"model": cfg["model"], "messages": messages, "temperature": 0.7, "max_tokens": max_tokens}
-
+    payload = {
+        "model": cfg["model"],
+        "messages": messages,
+        "temperature": 0.3 if provider_key == "deepseek" else 0.7,
+        "max_tokens": max_tokens
+    }
     try:
         async with httpx.AsyncClient(timeout=timeout) as client:
             resp = await client.post(cfg["url"], headers=cfg.get("headers", {}), json=payload)
