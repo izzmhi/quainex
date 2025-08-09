@@ -633,7 +633,7 @@ async def internal_error_handler(request: Request, exc: Exception):
 
 @app.on_event("startup")
 async def cleanup_old_history():
-    thirty_days_ago = datetime.datetime.utcnow() - datetime.timedelta(days=30)
+    thirty_days_ago = datetime.utcnow() - timedelta(days=30)
     supabase.table("chat_history")\
         .delete()\
         .lt("created_at", thirty_days_ago.isoformat())\
