@@ -11,7 +11,7 @@ from elevenlabs.client import ElevenLabs
 from groq import Groq
 from typing import Optional, List, Dict, Any
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 import sqlite3
 import json
 from supabase import create_client
@@ -56,7 +56,7 @@ supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 # Startup event to cleanup old history
 @app.on_event("startup")
 async def cleanup_old_history():
-    thirty_days_ago = datetime.datetime.utcnow() - datetime.timedelta(days=30)
+    thirty_days_ago = datetime.utcnow() - timedelta(days=30)
     res = supabase.table("chat_history")\
         .delete()\
         .lt("created_at", thirty_days_ago.isoformat())\
