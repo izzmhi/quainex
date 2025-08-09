@@ -14,6 +14,9 @@ import logging
 from datetime import datetime
 import sqlite3
 import json
+from supabase import create_client
+import datetime
+from supabase import create_client
 
 # ---------- Configuration ----------
 load_dotenv()
@@ -34,8 +37,27 @@ API_KEYS = {
     "gemini": os.getenv("GEMINI_API_KEY"),
     "elevenlabs": os.getenv("ELEVENLABS_API_KEY"),
     "serper": os.getenv("SERPER_API_KEY"),
-    "deepseek": os.getenv("DEEPSEEK_API_KEY")
+    "deepseek": os.getenv("DEEPSEEK_API_KEY"),
+    "supabaseurl": os.getenv("SUPABASE_URL"),
+    "supabasekey": os.getenv("SUPABASE_KEY")
 }
+
+}
+
+# Now initialize Supabase client with actual keys
+SUPABASE_URL = API_KEYS["supabaseurl"]
+SUPABASE_KEY = API_KEYS["supabasekey"]
+supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+
+# Startup event to cleanup old history
+@app.on_event("startup")
+async def cleanup_old_history():
+    thirty_days_ago = datetime.datetime.utcnow() - datetime.timedelta(days=30)
+    res = supabase.table("chat_history")\
+        .delete()\
+        .lt("created_at", thirty_days_ago.isoformat())\
+        .execute()
+    logger.info(f"Supabase cleanup deleted {res.data} rows older than 30 days")
 
 # Clients (third-party SDKs if available)
 clients = {
@@ -445,11 +467,6 @@ async def fetch_ai_response(provider: str, messages: list, timeout: int = 60, ma
 # ---------- API Routes ----------
 @app.post("/api/chat", response_model=dict, tags=["AI Services"])
 async def chat_handler(request: ChatRequest):
-    """
-    - message: user's message
-    - provider: single provider or 'ensemble'
-    - personality: which system prompt to use
-    """
     try:
         messages = build_prompt_context(request.message, request.personality)
         result = await fetch_ai_response(request.provider, messages, timeout=60, max_tokens=DEFAULT_MAX_TOKENS)
@@ -458,11 +475,27 @@ async def chat_handler(request: ChatRequest):
         candidates = result.get("candidates", [])
         ai_text = result.get("response", "")
 
-        # Log to DB
+        # Log to SQLite DB (your existing code)
         try:
             log_chat_db(request.message, final_provider or request.provider, ai_text, request.provider, candidates, request.personality)
         except Exception:
             logger.exception("Failed to log chat to DB")
+
+        # Save chat to Supabase
+        user_id = "guest"  # Replace with actual user identifier if available
+        try:
+            supabase.table("chat_history").insert({
+                "user_id": user_id,
+                "role": "user",
+                "message": request.message
+            }).execute()
+            supabase.table("chat_history").insert({
+                "user_id": user_id,
+                "role": "assistant",
+                "message": ai_text
+            }).execute()
+        except Exception as e:
+            logger.error(f"Supabase insert failed: {e}")
 
         return {
             "success": True,
@@ -596,3 +629,11 @@ async def http_exception_handler(request: Request, exc: HTTPException):
 async def internal_error_handler(request: Request, exc: Exception):
     logger.exception("Server error")
     return JSONResponse(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, content={"success": False, "error": "Internal server error", "code": status.HTTP_500_INTERNAL_SERVER_ERROR})
+
+@app.on_event("startup")
+async def cleanup_old_history():
+    thirty_days_ago = datetime.datetime.utcnow() - datetime.timedelta(days=30)
+    supabase.table("chat_history")\
+        .delete()\
+        .lt("created_at", thirty_days_ago.isoformat())\
+        .execute()
