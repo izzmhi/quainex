@@ -290,7 +290,7 @@
               </button>
               
               <div class="relative flex-1">
-                <textarea id="user-input" rows="1" placeholder="Message Quainex..." 
+                <textarea id="chat-input" rows="1" placeholder="Message Quainex..." 
                   class="w-full bg-transparent text-white px-1 py-1 pr-12 rounded-lg focus:outline-none resize-none overflow-hidden placeholder-gray-400"></textarea>
                 <div class="absolute right-3 top-1/2 -translate-y-1/2 flex items-center space-x-2">
                   <button type="button" id="voice-btn" class="text-gray-400 hover:text-white transition-colors p-1">
@@ -326,7 +326,7 @@
       });
 
       // Auto-resize textarea for multi-line input
-      const userInput = document.getElementById('user-input');
+      const userInput = document.getElementById('chat-input');
       userInput.addEventListener('input', () => {
         userInput.style.height = 'auto';
         userInput.style.height = userInput.scrollHeight + 'px';

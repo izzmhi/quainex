@@ -1,6 +1,6 @@
 // ---------- DOM References ----------
 const chatForm = document.getElementById("chat-form");
-const userInput = document.getElementById("user-input");
+const userInput = document.getElementById("chat-input");
 const chatBox = document.getElementById("chat-box");
 const voiceBtn = document.getElementById("voice-btn");
 const providerSelect = document.getElementById("provider-select");
