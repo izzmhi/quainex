@@ -33,7 +33,7 @@ API_KEYS = {
     "groq": os.getenv("GROQ_API_KEY"),
     "gemini": os.getenv("GEMINI_API_KEY"),
     "elevenlabs": os.getenv("ELEVENLABS_API_KEY"),
-    "serper": os.getenv("SERPER_API_KEY")
+    "serper": os.getenv("SERPER_API_KEY"),
     "deepseek": os.getenv("DEEPSEEK_API_KEY")
 }
 
