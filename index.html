@@ -40,7 +40,6 @@
       }
     </script>
     <style>
-      
       @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
       @import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500&display=swap');
       
@@ -114,113 +113,106 @@
         color: transparent;
       }
       
-/* Universal Sidebar & Overlay behavior */
-#sidebar {
-  position: fixed;
-  height: 100vh;
-  left: 0;
-  top: 0;
-  width: 256px; /* w-64 */
-  transform: translateX(-100%);
-  transition: transform 0.3s ease-in-out;
-  z-index: 50;
-  border-right: 1px solid #2a2a2a; /* border-dark-700 */
-  display: flex; /* Ensure it's a flex column as before */
-  flex-direction: column;
-}
+      /* Universal Sidebar & Overlay behavior */
+      #sidebar {
+        position: fixed;
+        height: 100vh;
+        left: 0;
+        top: 0;
+        width: 256px;
+        transform: translateX(-100%);
+        transition: transform 0.3s ease-in-out;
+        z-index: 50;
+        border-right: 1px solid #2a2a2a;
+        display: flex;
+        flex-direction: column;
+      }
 
-#sidebar.active {
-  transform: translateX(0);
-}
+      #sidebar.active {
+        transform: translateX(0);
+      }
 
-#overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background: rgba(0, 0, 0, 0.5);
-  z-index: 40;
-  display: none;
-}
-#overlay.active {
-  display: block;
-}
+      #overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.5);
+        z-index: 40;
+        display: none;
+      }
+      #overlay.active {
+        display: block;
+      }
 
-/* Base styles for chat screen and input form - centered */
-#chat-screen {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  width: 100%;
-  /* No left padding here, as content will be centered */
-}
+      /* Base styles for chat screen and input form - centered */
+      #chat-screen {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        width: 100%;
+      }
 
-/* Chat box should be centered and have proper padding */
-#chat-box {
-  max-width: 4xl; /* Tailwind's max-w-4xl is 56rem, suitable for large screens */
-  margin-left: auto;
-  margin-right: auto;
-  padding: 1.5rem; /* p-6 */
-  padding-bottom: 6rem; /* pb-24 to account for fixed input */
-  width: 100%;
-}
+      /* Chat box should be centered and have proper padding */
+      #chat-box {
+        max-width: 4xl;
+        margin-left: auto;
+        margin-right: auto;
+        padding: 1.5rem;
+        padding-bottom: 6rem;
+        width: 100%;
+      }
 
-/* Chat form container */
-.fixed-input-container {
-  position: fixed;
-  bottom: 0;
-  left: 0;
-  width: 100%;
-  padding: 1rem 1.5rem; /* p-4 md:p-6 */
-  background-color: #0a0a0a; /* bg-dark-900 */
-  z-index: 40;
-}
+      /* Chat form container */
+      .fixed-input-container {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        width: 100%;
+        padding: 1rem 1.5rem;
+        background-color: #0a0a0a;
+        z-index: 40;
+      }
 
-#chat-form .max-w-4xl {
-  max-width: 56rem; /* Tailwind's max-w-4xl */
-  margin-left: auto;
-  margin-right: auto;
-  background-color: #1a1a1a; /* bg-dark-800 */
-  border-radius: 1.5rem; /* rounded-2xl md:rounded-3xl */
-  padding: 0.5rem; /* p-2 */
-  border: 1px solid #2a2a2a; /* border-dark-700 */
-  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05); /* shadow-xl */
-}
+      #chat-form .max-w-4xl {
+        max-width: 56rem;
+        margin-left: auto;
+        margin-right: auto;
+        background-color: #1a1a1a;
+        border-radius: 1.5rem;
+        padding: 0.5rem;
+        border: 1px solid #2a2a2a;
+        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+      }
 
-/* Adjust message bubbles */
-.message-bubble {
-  max-width: 80%; /* Default for desktop and larger mobile screens */
-  word-wrap: break-word;
-}
+      /* Adjust message bubbles */
+      .message-bubble {
+        max-width: 80%;
+        word-wrap: break-word;
+      }
 
-/* Mobile-specific adjustments (still needed for overrides on smaller screens if any) */
-@media (max-width: 768px) {
-  /* No changes to #sidebar active state as it's now universal */
-  
-  /* Make chat-box max width smaller for mobile */
-  #chat-box {
-    padding-left: 1rem; /* Adjust padding for mobile */
-    padding-right: 1rem;
-    padding-bottom: 6rem; /* Keep padding for fixed input */
-  }
+      /* Mobile-specific adjustments */
+      @media (max-width: 768px) {
+        #chat-box {
+          padding-left: 1rem;
+          padding-right: 1rem;
+          padding-bottom: 6rem;
+        }
 
-  /* Adjust chat-form for mobile padding only */
-  .fixed-input-container {
-    padding: 1rem 1rem 2rem; /* More vertical padding on mobile */
-  }
-  
-  /* Make the input container full width on mobile */
-  #chat-form .max-w-4xl {
-    max-width: 100% !important; /* Override max-w-4xl on mobile */
-    border-radius: 1.5rem; /* Ensure consistent rounding */
-  }
+        .fixed-input-container {
+          padding: 1rem 1rem 2rem;
+        }
+        
+        #chat-form .max-w-4xl {
+          max-width: 100% !important;
+          border-radius: 1.5rem;
+        }
 
-  .message-bubble {
-    max-width: 90%; /* Increase bubble width for better use of space on mobile */
-  }
-}
-
+        .message-bubble {
+          max-width: 90%;
+        }
+      }
     </style>
   </head>
   <body class="bg-dark-900 text-gray-100 h-screen flex flex-col overflow-hidden">
@@ -229,7 +221,6 @@
 
     <header class="flex justify-between items-center p-4 bg-dark-800 border-b border-dark-700">
       <div class="flex items-center space-x-3">
-        <!-- Hamburger menu always visible now -->
         <button id="mobile-menu-btn" class="text-gray-300 hover:text-white transition-colors">
           <i class="fas fa-bars text-xl"></i>
         </button>
@@ -252,7 +243,6 @@
 
     <main class="flex flex-1 overflow-hidden relative">
       <aside id="sidebar" class="fixed inset-y-0 left-0 z-50 flex-col w-64 bg-dark-800 border-r border-dark-700 p-4 space-y-6 overflow-y-auto transform -translate-x-full transition-transform ease-in-out duration-300">
-        <!-- New Chat and Search buttons directly in the sidebar mimicking Gemini's top options -->
         <div class="space-y-4">
           <button class="w-full text-left p-2.5 rounded-lg hover:bg-dark-700 text-gray-300 hover:text-white transition-colors flex items-center space-x-3">
             <i class="fas fa-plus-circle w-5 text-center"></i>
@@ -284,18 +274,16 @@
       </aside>
 
       <section id="chat-screen" class="flex-1 flex flex-col w-full">
-        <!-- Main content area for welcome or chat messages -->
         <div class="flex-1 overflow-y-auto p-6 bg-dark-900 pb-24 flex items-center justify-center">
           <div id="welcome-screen" class="max-w-xl text-center">
             <h1 class="text-5xl font-bold text-gray-200 mb-8">Hello, how can I help you?</h1>
-            <!-- Suggested prompt chips removed as requested -->
           </div>
           <div id="chat-box" class="max-w-4xl mx-auto space-y-6 hidden"></div>
         </div>
 
-        <!-- Fixed input form at the bottom -->
+        <!-- Updated form with onsubmit="return false" -->
         <div class="fixed-input-container">
-          <form id="chat-form" class="max-w-4xl mx-auto flex flex-col items-center">
+          <form id="chat-form" onsubmit="return false" class="max-w-4xl mx-auto flex flex-col items-center">
             <div class="flex items-end w-full gap-2 p-2 bg-dark-800 rounded-2xl md:rounded-3xl border border-dark-700 shadow-xl">
               <button type="button" id="gemini-plus-btn" class="flex-shrink-0 text-gray-400 hover:text-white transition-colors p-2 rounded-full">
                 <i class="fas fa-plus text-lg"></i>
@@ -342,20 +330,6 @@
       userInput.addEventListener('input', () => {
         userInput.style.height = 'auto';
         userInput.style.height = userInput.scrollHeight + 'px';
-      });
-
-      // Show/hide welcome screen and chat box on first message submission
-      const chatBox = document.getElementById('chat-box');
-      const welcomeScreen = document.getElementById('welcome-screen');
-      const chatForm = document.getElementById('chat-form');
-
-      chatForm.addEventListener('submit', (event) => {
-        // This is a placeholder. Your app.js will handle the actual message sending.
-        // For demonstration, hide welcome screen and show chat box after first submission.
-        if (welcomeScreen.style.display !== 'none') {
-          welcomeScreen.style.display = 'none';
-          chatBox.classList.remove('hidden');
-        }
       });
     </script>
     <script src="app.js" defer></script>
