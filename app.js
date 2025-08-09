@@ -9,6 +9,7 @@ const sidebar = document.getElementById("sidebar");
 const userAvatar = document.getElementById("user-avatar");
 const userAvatarSidebar = document.getElementById("user-avatar-sidebar");
 const welcomeScreen = document.getElementById("welcome-screen");
+const overlay = document.getElementById("overlay");
 
 // New DOM references for the buttons
 const newChatBtn = document.querySelector("#sidebar button:first-of-type");
@@ -29,6 +30,9 @@ function init() {
   const provider = localStorage.getItem("provider") || "openrouter";
   providerSelect.value = provider;
   updateUserAvatar(currentUser);
+  
+  // Set up event listeners
+  setupEventListeners();
 }
 
 function updateUserAvatar(username) {
@@ -44,9 +48,38 @@ function updateUserAvatar(username) {
   }
 }
 
-// ---------- Chat Message Submission ----------
-chatForm.addEventListener("submit", async (e) => {
+// ---------- Event Listeners Setup ----------
+function setupEventListeners() {
+  // Chat form submission
+  chatForm.addEventListener("submit", handleFormSubmit);
+  
+  // Voice button
+  voiceBtn.addEventListener("click", handleVoiceInput);
+  
+  // Sidebar buttons
+  newChatBtn.addEventListener("click", handleNewChat);
+  searchBtn.addEventListener("click", handleSearch);
+  settingsBtn.addEventListener("click", handleSettings);
+  
+  // Sidebar toggle
+  mobileMenuBtn.addEventListener("click", toggleSidebar);
+  overlay.addEventListener("click", toggleSidebar);
+  
+  // Provider change
+  providerSelect.addEventListener("change", handleProviderChange);
+  
+  // Auto-resize textarea
+  userInput.addEventListener("input", () => {
+    userInput.style.height = 'auto';
+    userInput.style.height = userInput.scrollHeight + 'px';
+  });
+}
+
+// ---------- Form Submission Handler ----------
+async function handleFormSubmit(e) {
   e.preventDefault();
+  e.stopPropagation();
+  
   const message = userInput.value.trim();
   if (!message) return;
 
@@ -102,7 +135,7 @@ chatForm.addEventListener("submit", async (e) => {
     loader.remove();
     appendMessage("Quainex", "⚠️ Sorry, I encountered a network error. Please try again.", "bot");
   }
-});
+}
 
 // ---------- Typing Dots Animation ----------
 function showTyping(el) {
@@ -153,8 +186,8 @@ function appendMessage(sender, text, type = "bot", loading = false) {
   return wrapper;
 }
 
-// ---------- Voice Input ----------
-voiceBtn.addEventListener("click", async () => {
+// ---------- Voice Input Handler ----------
+async function handleVoiceInput() {
   if (mediaRecorder && mediaRecorder.state === "recording") {
     mediaRecorder.stop();
     voiceBtn.classList.remove("text-red-500");
@@ -190,49 +223,40 @@ voiceBtn.addEventListener("click", async () => {
     console.error("Error accessing microphone:", error);
     showCustomMessage("Microphone access denied: " + error.message);
   }
-});
+}
 
-// ---------- Sidebar Actions (New!) ----------
-// New Chat
-newChatBtn.addEventListener("click", () => {
+// ---------- Sidebar Handlers ----------
+function handleNewChat() {
   chatBox.innerHTML = ""; // Clear all messages
   chatBox.classList.add("hidden"); // Hide the chat box
   welcomeScreen.style.display = "block"; // Show the welcome screen
   sidebar.classList.remove("active"); // Hide the sidebar
   overlay.classList.remove("active"); // Hide the overlay
   showCustomMessage("Started a new chat!");
-});
+}
 
-// Search
-searchBtn.addEventListener("click", () => {
+function handleSearch() {
   showCustomMessage("Search functionality not implemented yet.");
   sidebar.classList.remove("active");
   overlay.classList.remove("active");
-});
+}
 
-// Settings
-settingsBtn.addEventListener("click", () => {
+function handleSettings() {
   showCustomMessage("Settings page not implemented yet.");
   sidebar.classList.remove("active");
   overlay.classList.remove("active");
-});
+}
 
-// ---------- Sidebar Toggle ----------
-const overlay = document.getElementById("overlay");
-mobileMenuBtn.addEventListener("click", () => {
+function toggleSidebar() {
   sidebar.classList.toggle("active");
   overlay.classList.toggle("active");
-});
-overlay.addEventListener("click", () => {
-  sidebar.classList.remove("active");
-  overlay.classList.remove("active");
-});
+}
 
-// ---------- Provider Change ----------
-providerSelect.addEventListener("change", () => {
+// ---------- Provider Change Handler ----------
+function handleProviderChange() {
   localStorage.setItem("provider", providerSelect.value);
   showCustomMessage(`Model provider set to ${providerSelect.options[providerSelect.selectedIndex].text}`);
-});
+}
 
 // ---------- Custom Message Display ----------
 function showCustomMessage(message) {
@@ -254,4 +278,4 @@ function showCustomMessage(message) {
 }
 
 // ---------- Run Init ----------
-init();
+document.addEventListener("DOMContentLoaded", init);
