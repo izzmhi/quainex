@@ -1,5 +1,5 @@
 # main.py
-from fastapi import FastAPI, Request, HTTPException, status, Response, UploadFile, File
+from fastapi import FastAPI, Request, HTTPException, status, Response, UploadFile, File, Body
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
@@ -18,6 +18,7 @@ from supabase import create_client
 import xml.etree.ElementTree as ET
 import ast
 import re
+from fastapi.encoders import jsonable_encoder
 
 # ---------- Configuration ----------
 load_dotenv()
@@ -64,6 +65,20 @@ SUPABASE_URL = API_KEYS["supabaseurl"]
 SUPABASE_KEY = API_KEYS["supabasekey"]
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
+# Enhanced CORS configuration
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "https://quainexai.onrender.com",
+        "https://quainex.onrender.com"
+    ],
+    allow_credentials=True,
+    allow_methods=["POST", "GET", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization", "Accept"],
+    expose_headers=["*"],
+    max_age=600
+)
+
 # Startup cleanup
 @app.on_event("startup")
 async def startup_cleanup():
@@ -89,38 +104,40 @@ DEFAULT_MAX_TOKENS = 500
 PROVIDER_FALLBACK_ORDER = ["openrouter", "together", "groq", "deepseek", "gemini"]
 MAX_AGENT_LOOPS = 5
 
-# CORS Configuration
-origins = [
-    "https://quainexai.onrender.com",
-    "https://quainex.onrender.com",
-    "http://localhost:3000",
-    "http://localhost:8000"
-]
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=origins,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-    expose_headers=["X-Response-Time"]
-)
-
 # Add root endpoint
 @app.get("/")
 async def root():
-    return {
-        "status": "running",
-        "service": "Quainex AI Backend",
-        "version": "2.1.0",
-        "docs": "/api/docs",
-        "available_endpoints": [
-            "/api/chat",
-            "/voice",
-            "/api/providers",
-            "/health"
-        ]
-    }
+    return JSONResponse(
+        content={
+            "status": "running",
+            "service": "Quainex AI Backend",
+            "version": "2.1.0",
+            "docs": "/api/docs",
+            "available_endpoints": [
+                "/api/chat",
+                "/voice",
+                "/api/providers",
+                "/health"
+            ]
+        },
+        headers={
+            "Access-Control-Allow-Origin": "https://quainexai.onrender.com",
+            "Access-Control-Allow-Credentials": "true"
+        }
+    )
+
+# Explicit OPTIONS handler for preflight requests
+@app.options("/api/chat")
+async def options_chat():
+    return Response(
+        status_code=status.HTTP_200_OK,
+        headers={
+            "Access-Control-Allow-Origin": "https://quainexai.onrender.com",
+            "Access-Control-Allow-Methods": "POST, OPTIONS",
+            "Access-Control-Allow-Headers": "Content-Type",
+            "Access-Control-Allow-Credentials": "true"
+        }
+    )
 
 # Middleware for request timing
 @app.middleware("http")
@@ -555,16 +572,19 @@ class QuainexAgent:
 
 # ---------- API Endpoints ----------
 @app.post("/api/chat")
-async def chat_endpoint(request: ChatRequest):
-    """Main chat endpoint"""
+async def chat_endpoint(request: ChatRequest = Body(...)):
+    """Main chat endpoint with enhanced CORS support"""
     try:
         start_time = datetime.now()
+        logger.info(f"Received chat request: {request}")
         
         if request.personality == "agent":
+            logger.info("Using agent personality")
             agent = QuainexAgent(request.provider)
             response_text = await agent.run(request.message)
             provider = request.provider
         else:
+            logger.info(f"Using {request.personality} personality")
             messages = build_prompt_context(request.message, request.personality)
             result = await fetch_ai_response(request.provider, messages)
             response_text = result["response"]
@@ -572,82 +592,133 @@ async def chat_endpoint(request: ChatRequest):
         
         # Log to database
         try:
-            supabase.table("chat_history").insert([
-                {"user_id": "api_user", "role": "user", "message": request.message},
-                {"user_id": "api_user", "role": "assistant", "message": response_text}
+            db_response = supabase.table("chat_history").insert([
+                {
+                    "user_id": "api_user", 
+                    "role": "user", 
+                    "message": request.message,
+                    "provider": provider
+                },
+                {
+                    "user_id": "api_user", 
+                    "role": "assistant", 
+                    "message": response_text,
+                    "provider": provider
+                }
             ]).execute()
+            logger.debug(f"Database insert result: {db_response}")
         except Exception as e:
             logger.error(f"Database logging failed: {str(e)}")
         
-        return {
-            "success": True,
-            "response": response_text,
-            "provider": provider,
-            "time_ms": (datetime.now() - start_time).total_seconds() * 1000
-        }
+        response_time = (datetime.now() - start_time).total_seconds() * 1000
+        logger.info(f"Request completed in {response_time:.2f}ms")
         
-    except HTTPException:
+        return JSONResponse(
+            status_code=status.HTTP_200_OK,
+            content=jsonable_encoder({
+                "success": True,
+                "response": response_text,
+                "provider": provider,
+                "time_ms": response_time
+            }),
+            headers={
+                "Access-Control-Allow-Origin": "https://quainexai.onrender.com",
+                "Access-Control-Allow-Credentials": "true"
+            }
+        )
+        
+    except HTTPException as he:
+        logger.error(f"HTTPException in chat endpoint: {he.detail}")
         raise
     except Exception as e:
-        logger.error(f"Chat endpoint error: {str(e)}")
+        logger.error(f"Unexpected error in chat endpoint: {str(e)}", exc_info=True)
         raise HTTPException(
-            status_code=500,
-            detail=f"Chat processing failed: {str(e)}"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An unexpected error occurred while processing your request"
         )
 
 @app.post("/voice")
 async def voice_endpoint(file: UploadFile = File(...)):
-    """Voice transcription endpoint"""
+    """Voice transcription endpoint with proper CORS handling"""
     try:
-        # In a real implementation, you would process the audio file here
-        # For now, we'll just return a mock response
-        return {
-            "success": True,
-            "response": "This is a mock response from voice transcription. Implement actual voice processing here."
-        }
+        logger.info("Received voice transcription request")
+        # In a real implementation, process the audio file here
+        # For now, return a mock response
+        
+        return JSONResponse(
+            status_code=status.HTTP_200_OK,
+            content={
+                "success": True,
+                "response": "This is a mock response from voice transcription"
+            },
+            headers={
+                "Access-Control-Allow-Origin": "https://quainexai.onrender.com",
+                "Access-Control-Allow-Credentials": "true"
+            }
+        )
     except Exception as e:
-        logger.error(f"Voice endpoint error: {str(e)}")
+        logger.error(f"Error in voice endpoint: {str(e)}", exc_info=True)
         raise HTTPException(
-            status_code=500,
-            detail=f"Voice processing failed: {str(e)}"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Voice processing failed"
         )
 
 # Developer API endpoints
 @app.post("/api/developers/register")
 async def register_developer(data: DeveloperAPIKey):
     """Register a new developer and issue API key"""
-    # In production, implement proper key generation and storage
-    return {
-        "success": True,
-        "api_key": f"quainex_dev_{hash(data.email)}",
-        "rate_limit": "100/day"
-    }
+    return JSONResponse(
+        status_code=status.HTTP_200_OK,
+        content={
+            "success": True,
+            "api_key": f"quainex_dev_{hash(data.email)}",
+            "rate_limit": "100/day"
+        },
+        headers={
+            "Access-Control-Allow-Origin": "https://quainexai.onrender.com",
+            "Access-Control-Allow-Credentials": "true"
+        }
+    )
 
 @app.get("/api/providers")
 async def list_providers():
     """List available AI providers"""
-    return {
-        "providers": [
-            {
-                "id": provider,
-                "enabled": bool(API_KEYS.get(provider))
-            }
-            for provider in PROVIDER_FALLBACK_ORDER
-        ]
-    }
+    return JSONResponse(
+        status_code=status.HTTP_200_OK,
+        content={
+            "providers": [
+                {
+                    "id": provider,
+                    "enabled": bool(API_KEYS.get(provider))
+                }
+                for provider in PROVIDER_FALLBACK_ORDER
+            ]
+        },
+        headers={
+            "Access-Control-Allow-Origin": "https://quainexai.onrender.com",
+            "Access-Control-Allow-Credentials": "true"
+        }
+    )
 
 # Health check endpoint
 @app.get("/health")
 async def health_check():
     """System health check"""
-    return {
-        "status": "healthy",
-        "timestamp": datetime.utcnow().isoformat(),
-        "providers": {
-            provider: "active" if API_KEYS.get(provider) else "inactive"
-            for provider in PROVIDER_FALLBACK_ORDER
+    return JSONResponse(
+        status_code=status.HTTP_200_OK,
+        content={
+            "status": "healthy",
+            "timestamp": datetime.utcnow().isoformat(),
+            "providers": {
+                provider: "active" if API_KEYS.get(provider) else "inactive"
+                for provider in PROVIDER_FALLBACK_ORDER
+            }
+        },
+        headers={
+            "Access-Control-Allow-Origin": "https://quainexai.onrender.com",
+            "Access-Control-Allow-Credentials": "true"
         }
-    }
+    )
 
 # ---------- Error Handling ----------
 @app.exception_handler(HTTPException)
@@ -658,18 +729,26 @@ async def http_exception_handler(request: Request, exc: HTTPException):
             "success": False,
             "error": exc.detail,
             "code": exc.status_code
+        },
+        headers={
+            "Access-Control-Allow-Origin": "https://quainexai.onrender.com",
+            "Access-Control-Allow-Credentials": "true"
         }
     )
 
 @app.exception_handler(Exception)
 async def generic_exception_handler(request: Request, exc: Exception):
-    logger.error(f"Unhandled exception: {str(exc)}")
+    logger.error(f"Unhandled exception: {str(exc)}", exc_info=True)
     return JSONResponse(
-        status_code=500,
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         content={
             "success": False,
             "error": "Internal server error",
             "code": 500
+        },
+        headers={
+            "Access-Control-Allow-Origin": "https://quainexai.onrender.com",
+            "Access-Control-Allow-Credentials": "true"
         }
     )
 
