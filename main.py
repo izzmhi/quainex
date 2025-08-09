@@ -48,6 +48,7 @@ app = FastAPI(
     docs_url="/api/docs",
     redoc_url="/api/redoc"
 )
+
 # Now initialize Supabase client with actual keys
 SUPABASE_URL = API_KEYS["supabaseurl"]
 SUPABASE_KEY = API_KEYS["supabasekey"]
@@ -98,20 +99,9 @@ async def add_process_time_header(request: Request, call_next):
     response.headers["X-Response-Time"] = str(process_time)
     logger.info(f"{request.method} {request.url.path} - {response.status_code} - {process_time:.3f}s")
     return response
+
 @app.get("/")
 async def root():
-    return {"message": "Hello from Quainex API!"}
-
-    
-
-@app.on_event("startup")
-async def cleanup_old_history():
-    thirty_days_ago = datetime.datetime.utcnow() - datetime.timedelta(days=30)
-    res = supabase.table("chat_history")\
-        .delete()\
-        .lt("created_at", thirty_days_ago.isoformat())\
-        .execute()
-    logger.info(f"Supabase cleanup deleted {res.data} rows older than 30 days")
     return {"message": "Hello from Quainex API!"}
 
 # ---------- Pydantic Models ----------
@@ -212,16 +202,18 @@ def init_db():
     return conn
 
 _db_conn = init_db()
-_db_cursor = _db_conn.cursor()
+_db_cursor = db_conn.cursor()
 
 def log_chat_db(user_message: str, final_provider: str, ai_response: str,
                 provider_requested: str, candidates: List[Dict[str, Any]], personality: str):
     try:
+        timestamp = datetime.utcnow().isoformat()  # Current UTC timestamp as ISO string
+        
         _db_cursor.execute(
             "INSERT INTO chats (timestamp, provider_requested, final_provider, user_message, ai_response, response_candidates, personality) VALUES (?, ?, ?, ?, ?, ?, ?)",
-            (datetime.utcnow().isoformat(), provider_requested, final_provider, user_message, ai_response, json.dumps(candidates, ensure_ascii=False), personality)
+            (timestamp, provider_requested, final_provider, user_message, ai_response, json.dumps(candidates, ensure_ascii=False), personality)
         )
-        _db_conn.commit()
+        db_conn.commit()
     except Exception as e:
         logger.exception("Failed to write chat log to DB: %s", e)
 
