@@ -92,9 +92,16 @@ async function handleFormSubmit(e) {
   const message = userInput.value.trim();
   if (!message) return;
 
+  // disable submit button while request is in-flight
+  const submitBtn = chatForm.querySelector('button[type="submit"]');
+  if (submitBtn) {
+    submitBtn.disabled = true;
+    submitBtn.classList.add('opacity-50', 'cursor-not-allowed');
+  }
+
   console.log("Preparing to send message:", message);
 
-  // Hide the welcome screen and show the chat box if it's the first message
+  // Hide welcome and show chat when first message sent
   if (welcomeScreen.style.display !== "none") {
     welcomeScreen.style.display = "none";
     chatBox.classList.remove("hidden");
@@ -102,6 +109,7 @@ async function handleFormSubmit(e) {
 
   appendMessage("You", message, "user");
   userInput.value = "";
+  userInput.style.height = "auto";
 
   const loader = appendMessage("Quainex", "...", "bot", true);
   showTyping(loader.querySelector(".typing"));
@@ -109,6 +117,7 @@ async function handleFormSubmit(e) {
   try {
     console.log("Sending request to backend...");
     
+    // <-- IMPORTANT: await and assign response
     const response = await fetch(`${backendBaseUrl}/api/chat`, {
       method: "POST",
       headers: { 
@@ -122,36 +131,43 @@ async function handleFormSubmit(e) {
       }),
       credentials: "include"
     });
-    
+
     console.log("Received response status:", response.status);
-    
+
+    // handle non-JSON or error bodies gracefully
     if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(
-        errorData.error || `HTTP error! status: ${response.status}`
-      );
+      let errorData = {};
+      try {
+        errorData = await response.json();
+      } catch (_) {
+        // not JSON
+      }
+      throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
     }
 
     const data = await response.json();
     console.log("Response data:", data);
-    
+
     loader.remove();
 
-    if (data.success && data.response) {
+    if (data && data.success && data.response) {
       appendMessage("Quainex", data.response, "bot");
     } else {
       throw new Error("Invalid response format from server");
     }
   } catch (error) {
     console.error("Chat error:", error);
-    loader.remove();
-    appendMessage(
-      "Quainex", 
-      `⚠️ Error: ${error.message || "Please try again later"}`, 
-      "bot"
-    );
+    try { loader.remove(); } catch (e) {}
+    appendMessage("Quainex", `⚠️ Error: ${error.message || "Please try again later"}`, "bot");
+  } finally {
+    // re-enable submit button
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+    }
   }
 }
+
 
 // ---------- Typing Dots Animation ----------
 function showTyping(el) {
