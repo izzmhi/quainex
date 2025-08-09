@@ -114,7 +114,14 @@
         color: transparent;
       }
       
-      @media (max-width: 768px) {
+@media (max-width: 768px) {
+  /* Styles inside here ONLY apply on screens 768px wide or smaller */
+
+  .message-bubble {
+    max-width: 80%;
+    word-wrap: break-word;
+  }
+  
   #chat-screen {
     width: 100% !important;
     padding: 0 1rem;

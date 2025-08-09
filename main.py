@@ -42,7 +42,14 @@ API_KEYS = {
     "supabasekey": os.getenv("SUPABASE_KEY")
 }
 
-
+# Define FastAPI app first
+app = FastAPI(
+    title="Quainex AI API",
+    description="Premium AI Assistant Backend Service",
+    version="1.0.0",
+    docs_url="/api/docs",
+    redoc_url="/api/redoc"
+)
 # Now initialize Supabase client with actual keys
 SUPABASE_URL = API_KEYS["supabaseurl"]
 SUPABASE_KEY = API_KEYS["supabasekey"]
@@ -67,16 +74,6 @@ clients = {
 # Constants
 DEFAULT_MAX_TOKENS = 500
 PROVIDER_FALLBACK_ORDER = ["openrouter", "together", "gemini", "groq", "deepseek"]
-
-
-# ---------- FastAPI App ----------
-app = FastAPI(
-    title="Quainex AI API",
-    description="Premium AI Assistant Backend Service",
-    version="1.0.0",
-    docs_url="/api/docs",
-    redoc_url="/api/redoc"
-)
 
 # CORS Configuration — adjust origins as needed
 origins = [
@@ -103,6 +100,21 @@ async def add_process_time_header(request: Request, call_next):
     response.headers["X-Response-Time"] = str(process_time)
     logger.info(f"{request.method} {request.url.path} - {response.status_code} - {process_time:.3f}s")
     return response
+@app.get("/")
+async def root():
+    return {"message": "Hello from Quainex API!"}
+
+    
+
+@app.on_event("startup")
+async def cleanup_old_history():
+    thirty_days_ago = datetime.datetime.utcnow() - datetime.timedelta(days=30)
+    res = supabase.table("chat_history")\
+        .delete()\
+        .lt("created_at", thirty_days_ago.isoformat())\
+        .execute()
+    logger.info(f"Supabase cleanup deleted {res.data} rows older than 30 days")
+    return {"message": "Hello from Quainex API!"}
 
 # ---------- Pydantic Models ----------
 class ChatRequest(BaseModel):
