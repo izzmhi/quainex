@@ -40,6 +40,7 @@
       }
     </script>
     <style>
+      
       @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
       @import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500&display=swap');
       
@@ -112,6 +113,24 @@
         background-clip: text;
         color: transparent;
       }
+      
+      @media (max-width: 768px) {
+  #chat-screen {
+    width: 100% !important;
+    padding: 0 1rem;
+  }
+
+  /* Make chat-box max width smaller for mobile */
+  #chat-box {
+    max-width: 100% !important;
+  }
+
+  /* Make chat input area full width */
+  #chat-form .max-w-4xl {
+    max-width: 100% !important;
+  }
+}
+
     </style>
   </head>
   <body class="bg-dark-900 text-gray-100 h-screen flex flex-col overflow-hidden">
