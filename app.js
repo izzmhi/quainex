@@ -28,6 +28,8 @@ const backendBaseUrl = "https://quainex.onrender.com";
 // ---------- Init ----------
 function init() {
   // Remove any existing listeners to prevent duplicates
+  console.log("handleFormSubmit fired!");
+  console.log("init() starting...");
   chatForm.removeEventListener("submit", handleFormSubmit);
   voiceBtn.removeEventListener("click", handleVoiceInput);
   mobileMenuBtn.removeEventListener("click", toggleSidebar);
@@ -58,9 +60,10 @@ function updateUserAvatar(username) {
 
 // ---------- Event Listeners Setup ----------
 function setupEventListeners() {
-  // Chat form submission
-  chatForm.addEventListener("submit", handleFormSubmit);
-  
+    console.log("setupEventListeners called, attaching submit handler");
+
+    document.getElementById("chat-form")
+        .addEventListener("submit", handleFormSubmit);
   // Voice button
   voiceBtn.addEventListener("click", handleVoiceInput);
   
@@ -318,5 +321,7 @@ function showCustomMessage(message) {
   }, 3000);
 }
 
-// ---------- Run Init ----------
-document.addEventListener("DOMContentLoaded", init);
+document.addEventListener("DOMContentLoaded", function() {
+    console.log("init() starting...");
+    setupEventListeners();
+});
