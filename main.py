@@ -15,8 +15,6 @@ from datetime import datetime
 import sqlite3
 import json
 from supabase import create_client
-import datetime
-from supabase import create_client
 
 # ---------- Configuration ----------
 load_dotenv()
