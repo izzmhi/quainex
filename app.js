@@ -22,8 +22,8 @@ let mediaRecorder,
   audioChunks = [];
 let audio = new Audio();
 
-// IMPORTANT: Get the backend URL from the global variable set in index.html
-const backendBaseUrl = window.BACKEND_URL;
+// IMPORTANT: Set backend URL to your Render backend
+const backendBaseUrl = "https://quainex.onrender.com";
 
 // ---------- Init ----------
 function init() {
@@ -104,7 +104,10 @@ async function handleFormSubmit(e) {
 
     const res = await fetch(`${backendBaseUrl}/api/chat`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { 
+        "Content-Type": "application/json",
+        "Origin": "https://quainexai.onrender.com"  // Explicitly set origin
+      },
       body: JSON.stringify(body),
     });
 
@@ -205,7 +208,13 @@ async function handleVoiceInput() {
       formData.append("file", audioBlob);
       const loader = appendMessage("Quainex", "Transcribing voice...", "bot", true);
       try {
-        const res = await fetch(`${backendBaseUrl}/voice`, { method: "POST", body: formData });
+        const res = await fetch(`${backendBaseUrl}/voice`, { 
+          method: "POST", 
+          body: formData,
+          headers: {
+            "Origin": "https://quainexai.onrender.com"  // Explicitly set origin
+          }
+        });
         const data = await res.json();
         loader.remove();
         appendMessage("Quainex", data.response, "bot");

@@ -106,6 +106,22 @@ app.add_middleware(
     expose_headers=["X-Response-Time"]
 )
 
+# Add root endpoint
+@app.get("/")
+async def root():
+    return {
+        "status": "running",
+        "service": "Quainex AI Backend",
+        "version": "2.1.0",
+        "docs": "/api/docs",
+        "available_endpoints": [
+            "/api/chat",
+            "/voice",
+            "/api/providers",
+            "/health"
+        ]
+    }
+
 # Middleware for request timing
 @app.middleware("http")
 async def add_process_time_header(request: Request, call_next):
@@ -241,7 +257,7 @@ async def query_provider(provider: str, messages: list, timeout: int = 30) -> di
             "url": "https://openrouter.ai/api/v1/chat/completions",
             "headers": {
                 "Authorization": f"Bearer {API_KEYS['openrouter']}",
-                "HTTP-Referer": "https://quainex.onrender.com",
+                "HTTP-Referer": "https://quainexai.onrender.com",
                 "X-Title": "Quainex AI"
             },
             "payload": {
@@ -257,6 +273,17 @@ async def query_provider(provider: str, messages: list, timeout: int = 30) -> di
             },
             "payload": {
                 "model": "llama3-70b-8192",
+                "messages": messages,
+                "temperature": 0.7
+            }
+        },
+        "deepseek": {
+            "url": "https://api.deepseek.com/v1/chat/completions",
+            "headers": {
+                "Authorization": f"Bearer {API_KEYS['deepseek']}"
+            },
+            "payload": {
+                "model": "deepseek-chat",
                 "messages": messages,
                 "temperature": 0.7
             }
@@ -566,6 +593,23 @@ async def chat_endpoint(request: ChatRequest):
         raise HTTPException(
             status_code=500,
             detail=f"Chat processing failed: {str(e)}"
+        )
+
+@app.post("/voice")
+async def voice_endpoint(file: UploadFile = File(...)):
+    """Voice transcription endpoint"""
+    try:
+        # In a real implementation, you would process the audio file here
+        # For now, we'll just return a mock response
+        return {
+            "success": True,
+            "response": "This is a mock response from voice transcription. Implement actual voice processing here."
+        }
+    except Exception as e:
+        logger.error(f"Voice endpoint error: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Voice processing failed: {str(e)}"
         )
 
 # Developer API endpoints
