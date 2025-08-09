@@ -2,18 +2,20 @@
 const chatForm = document.getElementById("chat-form");
 const userInput = document.getElementById("user-input");
 const chatBox = document.getElementById("chat-box");
-const toolBtns = document.querySelectorAll(".tool-btn");
 const voiceBtn = document.getElementById("voice-btn");
 const providerSelect = document.getElementById("provider-select");
-const ttsBtn = document.getElementById("tts-btn");
-const imgGenBtn = document.getElementById("img-gen-btn");
 const mobileMenuBtn = document.getElementById("mobile-menu-btn");
 const sidebar = document.getElementById("sidebar");
 const userAvatar = document.getElementById("user-avatar");
 const userAvatarSidebar = document.getElementById("user-avatar-sidebar");
+const welcomeScreen = document.getElementById("welcome-screen");
+
+// New DOM references for the buttons
+const newChatBtn = document.querySelector("#sidebar button:first-of-type");
+const searchBtn = document.querySelector("#sidebar button:nth-of-type(2)");
+const settingsBtn = document.querySelector("#sidebar .mt-auto button:first-of-type");
 
 // ---------- Global Variables ----------
-let currentTool = "chat";
 let currentUser = "guest";
 let mediaRecorder,
   audioChunks = [];
@@ -27,15 +29,6 @@ function init() {
   const provider = localStorage.getItem("provider") || "openrouter";
   providerSelect.value = provider;
   updateUserAvatar(currentUser);
-  
-  // Add welcome message
-  setTimeout(() => {
-    appendMessage(
-      "Quainex AI", 
-      "Hello! I'm Quainex AI, your intelligent assistant. How can I help you today?", 
-      "bot"
-    );
-  }, 500);
 }
 
 function updateUserAvatar(username) {
@@ -51,22 +44,17 @@ function updateUserAvatar(username) {
   }
 }
 
-// ---------- Tool Switching ----------
-toolBtns.forEach((btn) => {
-  btn.addEventListener("click", () => {
-    toolBtns.forEach(b => b.classList.remove("bg-primary-500/20", "text-primary-400"));
-    btn.classList.add("bg-primary-500/20", "text-primary-400");
-    currentTool = btn.dataset.tool;
-    userInput.placeholder = `Ask me to ${currentTool}...`;
-    showCustomMessage(`Switched to ${currentTool} mode`);
-  });
-});
-
 // ---------- Chat Message Submission ----------
 chatForm.addEventListener("submit", async (e) => {
   e.preventDefault();
   const message = userInput.value.trim();
   if (!message) return;
+
+  // Hide the welcome screen and show the chat box if it's the first message
+  if (welcomeScreen.style.display !== "none") {
+    welcomeScreen.style.display = "none";
+    chatBox.classList.remove("hidden");
+  }
 
   appendMessage("You", message, "user");
   userInput.value = "";
@@ -104,7 +92,7 @@ chatForm.addEventListener("submit", async (e) => {
 
     if (!data.response || !data.response.trim()) {
       console.warn("Empty AI response:", data);
-      appendMessage("Quainex", "⚠️ I got an empty response from the AI provider. Please try again.", "bot");
+      appendMessage("Quainex", "⚠️ I got an empty response. Please try again.", "bot");
       return;
     }
 
@@ -129,7 +117,7 @@ function showTyping(el) {
 }
 
 // ---------- Append Message to Chat ----------
-function appendMessage(sender, text, type = "bot", loading = false, isImage = false) {
+function appendMessage(sender, text, type = "bot", loading = false) {
   const wrapper = document.createElement("div");
   wrapper.className = `flex ${type === "user" ? "justify-end" : "justify-start"} fade-in`;
   
@@ -152,12 +140,6 @@ function appendMessage(sender, text, type = "bot", loading = false, isImage = fa
     typing.classList.add("typing");
     typing.textContent = "...";
     bubble.appendChild(typing);
-  } else if (isImage) {
-    const imgElement = document.createElement("img");
-    imgElement.src = text;
-    imgElement.alt = "Generated Image";
-    imgElement.className = "rounded-lg shadow-md mt-2 w-full max-w-xs md:max-w-sm lg:max-w-md";
-    bubble.appendChild(imgElement);
   } else {
     const contentElement = document.createElement("div");
     contentElement.className = "text-gray-100";
@@ -170,67 +152,6 @@ function appendMessage(sender, text, type = "bot", loading = false, isImage = fa
   chatBox.scrollTop = chatBox.scrollHeight;
   return wrapper;
 }
-
-// ---------- Text-to-Speech ----------
-ttsBtn.addEventListener("click", async () => {
-  const message = userInput.value.trim();
-  if (!message) {
-    showCustomMessage("Please enter text to speak.");
-    return;
-  }
-  appendMessage("You", `[TTS Request]\n${message}`, "user");
-  userInput.value = "";
-  const loader = appendMessage("Quainex", "Generating audio...", "bot", true);
-  showTyping(loader.querySelector(".typing"));
-  try {
-    const res = await fetch(`${backendBaseUrl}/tts`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text: message }),
-    });
-    const data = await res.blob();
-    loader.remove();
-    const audioUrl = URL.createObjectURL(data);
-    audio.src = audioUrl;
-    audio.play();
-    appendMessage("Quainex", "🔊 Playing audio...", "bot");
-  } catch (error) {
-    console.error("TTS error:", error);
-    loader.remove();
-    appendMessage("Quainex", "⚠️ Couldn't generate audio. Please try again.", "bot");
-  }
-});
-
-// ---------- Image Generation ----------
-imgGenBtn.addEventListener("click", async () => {
-  const message = userInput.value.trim();
-  if (!message) {
-    showCustomMessage("Please enter a prompt to generate an image.");
-    return;
-  }
-  appendMessage("You", `[Image Generation]\n${message}`, "user");
-  userInput.value = "";
-  const loader = appendMessage("Quainex", "Generating image...", "bot", true);
-  showTyping(loader.querySelector(".typing"));
-  try {
-    const res = await fetch(`${backendBaseUrl}/image-generation`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ prompt: message }),
-    });
-    const data = await res.json();
-    loader.remove();
-    if (data.image_url) {
-      appendMessage("Quainex", data.image_url, "bot", false, true);
-    } else {
-      appendMessage("Quainex", data.output, "bot");
-    }
-  } catch (error) {
-    console.error("Image generation error:", error);
-    loader.remove();
-    appendMessage("Quainex", "⚠️ Image generation failed. Please try again.", "bot");
-  }
-});
 
 // ---------- Voice Input ----------
 voiceBtn.addEventListener("click", async () => {
@@ -271,10 +192,40 @@ voiceBtn.addEventListener("click", async () => {
   }
 });
 
-// ---------- Mobile Menu Toggle ----------
+// ---------- Sidebar Actions (New!) ----------
+// New Chat
+newChatBtn.addEventListener("click", () => {
+  chatBox.innerHTML = ""; // Clear all messages
+  chatBox.classList.add("hidden"); // Hide the chat box
+  welcomeScreen.style.display = "block"; // Show the welcome screen
+  sidebar.classList.remove("active"); // Hide the sidebar
+  overlay.classList.remove("active"); // Hide the overlay
+  showCustomMessage("Started a new chat!");
+});
+
+// Search
+searchBtn.addEventListener("click", () => {
+  showCustomMessage("Search functionality not implemented yet.");
+  sidebar.classList.remove("active");
+  overlay.classList.remove("active");
+});
+
+// Settings
+settingsBtn.addEventListener("click", () => {
+  showCustomMessage("Settings page not implemented yet.");
+  sidebar.classList.remove("active");
+  overlay.classList.remove("active");
+});
+
+// ---------- Sidebar Toggle ----------
+const overlay = document.getElementById("overlay");
 mobileMenuBtn.addEventListener("click", () => {
-  sidebar.classList.toggle("hidden");
-  sidebar.classList.toggle("flex");
+  sidebar.classList.toggle("active");
+  overlay.classList.toggle("active");
+});
+overlay.addEventListener("click", () => {
+  sidebar.classList.remove("active");
+  overlay.classList.remove("active");
 });
 
 // ---------- Provider Change ----------
