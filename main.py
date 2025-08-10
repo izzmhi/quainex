@@ -45,6 +45,8 @@ API_KEYS = {
     "supabasekey": os.getenv("SUPABASE_KEY")
 }
 
+NEWS_API_KEY = "d32c445b4df84f9e8eb63b1f7991e458"
+
 # Initialize FastAPI app
 app = FastAPI(
     title="Quainex AI API",
@@ -77,7 +79,45 @@ app.add_middleware(
     expose_headers=["*"],
     max_age=600
 )
+# ---------- New Tools ----------
+async def get_world_time(location: str) -> str:
+    """Get current time for any location using WorldTimeAPI"""
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            tz_list = (await client.get("http://worldtimeapi.org/api/timezone")).json()
+            match = [tz for tz in tz_list if location.replace(" ", "_").lower() in tz.lower()]
+            if not match:
+                return f"❌ Could not find timezone for '{location}'."
+            tz_data = (await client.get(f"http://worldtimeapi.org/api/timezone/{match[0]}")).json()
+            dt_obj = datetime.fromisoformat(tz_data["datetime"].replace("Z", "+00:00"))
+            return f"🕒 The current time in {location.title()} is {dt_obj.strftime('%Y-%m-%d %H:%M:%S')} ({match[0]})."
+    except Exception as e:
+        return f"⚠️ Error fetching time: {str(e)}"
 
+async def get_latest_news(country_code: str) -> str:
+    """Fetch latest news headlines from NewsAPI"""
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            url = f"https://newsapi.org/v2/top-headlines?country={country_code.lower()}&apiKey={NEWS_API_KEY}"
+            res = (await client.get(url)).json()
+            if res.get("status") != "ok":
+                return f"❌ Could not fetch news for '{country_code}'."
+            articles = res.get("articles", [])
+            if not articles:
+                return f"No news found for '{country_code}'."
+            headlines = [f"{i+1}. {a['title']} ({a['source']['name']})" for i, a in enumerate(articles[:5])]
+            return f"📰 Latest news in {country_code.upper()}:\n" + "\n".join(headlines)
+    except Exception as e:
+        return f"⚠️ Error fetching news: {str(e)}"
+
+
+# Register all tools
+TOOL_REGISTRY = {
+    "web_search": None,  # Original implementation will be here
+    "python_interpreter": None,  # Original implementation will be here
+    "world_time": get_world_time,
+    "latest_news": get_latest_news
+}
 # Startup cleanup
 @app.on_event("startup")
 async def startup_cleanup():
@@ -141,6 +181,7 @@ class DeveloperAPIKey(BaseModel):
     company: Optional[str] = None
 
 # ---------- Core AI Components ----------
+# ---------- Tools Schema ----------
 TOOLS_SCHEMA = """
 <tools>
     <tool>
@@ -162,6 +203,28 @@ TOOLS_SCHEMA = """
                 <name>code</name>
                 <type>string</type>
                 <description>Python code to execute</description>
+            </param>
+        </parameters>
+    </tool>
+    <tool>
+        <name>world_time</name>
+        <description>Get current time for any city or country</description>
+        <parameters>
+            <param>
+                <name>location</name>
+                <type>string</type>
+                <description>The city or country name</description>
+            </param>
+        </parameters>
+    </tool>
+    <tool>
+        <name>latest_news</name>
+        <description>Get the latest news headlines for a country</description>
+        <parameters>
+            <param>
+                <name>country_code</name>
+                <type>string</type>
+                <description>The 2-letter country code (e.g., us, gb, gh)</description>
             </param>
         </parameters>
     </tool>
@@ -310,28 +373,30 @@ async def query_provider(provider: str, messages: list, timeout: int = 30) -> di
             "provider": provider
         }
 
+DEFAULT_PROVIDER = "openrouter"  # Backend provider for Brilux
+DEFAULT_MODEL_NAME = "brilux"    # Friendly AI model name
+
 async def fetch_ai_response(provider: str, messages: list, timeout: int = 60) -> dict:
     """Get AI response with fallback logic"""
-    if provider not in PROVIDER_FALLBACK_ORDER:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Invalid provider: {provider}. Available: {PROVIDER_FALLBACK_ORDER}"
-        )
-    
-    # Try requested provider first
+
+    # If provider is invalid or not set, use Brilux
+    if not provider or provider not in PROVIDER_FALLBACK_ORDER:
+        logger.warning(f"defaulting to Brilux ({DEFAULT_PROVIDER})")
+        provider = DEFAULT_PROVIDER
+
+    # Try requested (or default) provider first
     result = await query_provider(provider, messages, timeout)
     if result["ok"]:
         return {
             "success": True,
             "response": result["response"],
-            "provider": provider
+            "provider": DEFAULT_MODEL_NAME if provider == DEFAULT_PROVIDER else provider
         }
-    
-    # Fallback to other providers
+
+    # Fallback
     for fallback in [p for p in PROVIDER_FALLBACK_ORDER if p != provider]:
         if not API_KEYS.get(fallback):
             continue
-            
         result = await query_provider(fallback, messages, timeout)
         if result["ok"]:
             return {
@@ -340,11 +405,10 @@ async def fetch_ai_response(provider: str, messages: list, timeout: int = 60) ->
                 "provider": fallback,
                 "fallback_used": True
             }
-    
-    # All providers failed
+
     raise HTTPException(
         status_code=502,
-        detail="All AI providers failed to respond"
+        detail="Failed to respond"
     )
 
 # ---------- Tool Implementations ----------
