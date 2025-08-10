@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full bg-dark-900">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Login - Quainex AI</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+      body {
+        font-family: 'Inter', sans-serif;
+      }
+    </style>
+</head>
+<body class="h-full flex flex-col items-center justify-center text-gray-100">
+    <div class="w-full max-w-xs mx-4">
+        <h1 class="text-2xl font-bold text-center mb-8">Log In</h1>
+        
+        <form id="login-form" class="space-y-4">
+            <div>
+                <label for="email" class="block text-sm font-medium mb-1">Email</label>
+                <input type="email" id="email" required
+                    class="w-full bg-dark-700 border border-dark-600 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500">
+            </div>
+            
+            <div>
+                <label for="password" class="block text-sm font-medium mb-1">Password</label>
+                <input type="password" id="password" required
+                    class="w-full bg-dark-700 border border-dark-600 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500">
+            </div>
+            
+            <button type="submit" class="w-full bg-primary-600 hover:bg-primary-500 text-white py-2 rounded-lg transition-colors">
+                Log In
+            </button>
+        </form>
+        
+        <div class="text-center mt-4 text-sm">
+            <a href="/signup.html" class="text-primary-400 hover:text-primary-300">Create an account</a>
+        </div>
+    </div>
+
+    <script>
+        document.getElementById('login-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            // In a real app, you would call your backend here
+            // For demo purposes, we'll simulate a successful login
+            localStorage.setItem('authState', 'authenticated');
+            localStorage.setItem('username', 'Demo User');
+            localStorage.setItem('email', document.getElementById('email').value);
+            
+            window.location.href = '/chat.html';
+        });
+    </script>
+</body>
+</html>

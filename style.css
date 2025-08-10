@@ -1,13 +1,719 @@
-body {
-  font-family: sans-serif;
-  background: #f0f0f0;
-  padding: 20px;
+# main.py
+from fastapi import FastAPI, Request, HTTPException, status, Response, UploadFile, File, Body, Query
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel
+import os
+import httpx
+from dotenv import load_dotenv
+import asyncio
+from elevenlabs.client import ElevenLabs
+from groq import Groq
+from typing import Optional, List, Dict, Any
+import logging
+from datetime import datetime, timedelta
+import json
+from supabase import create_client
+import xml.etree.ElementTree as ET
+import re
+from fastapi.encoders import jsonable_encoder
+import uuid
+
+# ---------- Configuration ----------
+load_dotenv()
+
+# Logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[logging.StreamHandler()]
+)
+logger = logging.getLogger(__name__)
+
+# API Keys (from .env)
+API_KEYS = {
+    "openrouter": os.getenv("OPENROUTER_API_KEY"),
+    "together": os.getenv("TOGETHER_API_KEY"),
+    "groq": os.getenv("GROQ_API_KEY"),
+    "gemini": os.getenv("GEMINI_API_KEY"),
+    "elevenlabs": os.getenv("ELEVENLABS_API_KEY"),
+    "serper": os.getenv("SERPER_API_KEY"),
+    "deepseek": os.getenv("DEEPSEEK_API_KEY"),
+    "supabaseurl": os.getenv("SUPABASE_URL"),
+    "supabasekey": os.getenv("SUPABASE_KEY")
 }
-#chat-box {
-  background: white;
-  padding: 10px;
-  margin-bottom: 10px;
-  height: 300px;
-  overflow-y: scroll;
-  border: 1px solid #ccc;
+
+# News API (kept as environment variable if you prefer)
+NEWS_API_KEY = os.getenv("NEWSAPI_KEY") or "d32c445b4df84f9e8eb63b1f7991e458"
+
+# FastAPI app
+app = FastAPI(title="Quainex AI API", version="2.2.0")
+
+# Supabase client
+SUPABASE_URL = API_KEYS.get("supabaseurl")
+SUPABASE_KEY = API_KEYS.get("supabasekey")
+if SUPABASE_URL and SUPABASE_KEY:
+    supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+else:
+    supabase = None
+    logger.warning("Supabase not configured. History endpoints will fail without SUPABASE_URL and SUPABASE_KEY.")
+
+# CORS (allow all origins for dev; restrict in production)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+    expose_headers=["*"]
+)
+
+# Providers and defaults
+PROVIDER_FALLBACK_ORDER = ["openrouter", "together", "groq", "deepseek", "gemini"]
+DEFAULT_PROVIDER = "openrouter"   # maps to Brilux
+DEFAULT_MODEL_NAME = "brilux"     # user-visible name
+
+# ---------- Pydantic Models ----------
+class ChatRequest(BaseModel):
+    message: str
+    provider: Optional[str] = None
+    personality: str = "default"
+    conversation_id: Optional[str] = None
+    user_id: Optional[str] = None
+
+class SearchRequest(BaseModel):
+    query: str
+
+# ---------- Helper: build prompt/context ----------
+def build_prompt_context(prompt: str, personality: str, history: list = None) -> list:
+    system_prompt = "You are Quainex, a helpful assistant." if personality != "agent" else "You are Quainex agent."
+    messages = [{"role": "system", "content": system_prompt}]
+    if history:
+        messages.extend(history)
+    messages.append({"role": "user", "content": prompt})
+    return messages
+
+# ---------- Provider query (simplified) ----------
+async def query_provider(provider: str, messages: list, timeout: int = 30) -> dict:
+    """Query configured provider endpoints (basic implementation)."""
+    # NOTE: This function expects API_KEYS to have provider keys; adjust payloads per provider docs.
+    endpoints = {
+        "openrouter": {
+            "url": "https://openrouter.ai/api/v1/chat/completions",
+            "headers": {"Authorization": f"Bearer {API_KEYS.get('openrouter')}"}
+        },
+        "groq": {
+            "url": "https://api.groq.com/openai/v1/chat/completions",
+            "headers": {"Authorization": f"Bearer {API_KEYS.get('groq')}"}
+        },
+        "deepseek": {
+            "url": "https://api.deepseek.com/v1/chat/completions",
+            "headers": {"Authorization": f"Bearer {API_KEYS.get('deepseek')}"}
+        }
+    }
+
+    if provider not in endpoints:
+        return {"ok": False, "error": f"Provider {provider} not configured", "provider": provider}
+
+    payload = {"model": "gpt-4o-mini" if provider == "openrouter" else "gpt-4o-mini", "messages": messages}
+    try:
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            resp = await client.post(endpoints[provider]["url"], headers=endpoints[provider]["headers"], json=payload)
+            if resp.status_code != 200:
+                return {"ok": False, "error": f"{provider} returned {resp.status_code}", "status_code": resp.status_code}
+            data = resp.json()
+            # flexible extraction
+            content = ""
+            if isinstance(data.get("choices"), list) and data["choices"]:
+                content = data["choices"][0].get("message", {}).get("content", "") or data["choices"][0].get("text", "")
+            else:
+                content = data.get("message") or data.get("output") or json.dumps(data)[:500]
+            return {"ok": True, "response": content, "raw": data, "provider": provider}
+    except Exception as e:
+        logger.error(f"Error querying provider {provider}: {e}")
+        return {"ok": False, "error": str(e), "provider": provider}
+
+# ---------- fetch_ai_response with silent default and user note ----------
+async def fetch_ai_response(provider: Optional[str], messages: list, timeout: int = 60) -> dict:
+    # If provider invalid -> use DEFAULT_PROVIDER (Brilux) silently and record note
+    user_note = None
+    if not provider or provider not in PROVIDER_FALLBACK_ORDER:
+        user_note = f"(Note: used {DEFAULT_MODEL_NAME} — your default AI model.)"
+        provider_to_try = DEFAULT_PROVIDER
+        logger.info(f"Provider '{provider}' not recognized — defaulting to {DEFAULT_MODEL_NAME}")
+    else:
+        provider_to_try = provider
+
+    # Try requested/default provider first
+    result = await query_provider(provider_to_try, messages, timeout)
+    if result.get("ok"):
+        resp_text = result["response"]
+        if user_note:
+            resp_text = resp_text.rstrip() + " " + user_note
+        return {"success": True, "response": resp_text, "provider": DEFAULT_MODEL_NAME if provider_to_try == DEFAULT_PROVIDER else provider_to_try}
+
+    # Fallback loop
+    for fallback in [p for p in PROVIDER_FALLBACK_ORDER if p != provider_to_try]:
+        if not API_KEYS.get(fallback):
+            continue
+        result = await query_provider(fallback, messages, timeout)
+        if result.get("ok"):
+            return {"success": True, "response": result["response"], "provider": fallback, "fallback_used": True}
+
+    raise HTTPException(status_code=502, detail="All AI providers failed to respond")
+
+# ---------- Web Search Tool (Serper) ----------
+async def execute_web_search(query: str) -> str:
+    if not API_KEYS.get("serper"):
+        return "Search API not configured"
+    try:
+        async with httpx.AsyncClient(timeout=20) as client:
+            payload = {"q": query, "gl": "us", "hl": "en"}
+            headers = {"X-API-KEY": API_KEYS.get("serper")}
+            res = await client.post("https://google.serper.dev/search", headers=headers, json=payload)
+            res.raise_for_status()
+            data = res.json()
+            items = []
+            for item in data.get("organic", [])[:4]:
+                items.append(f"{item.get('title')}\n{item.get('link')}\n{item.get('snippet')}")
+            return "\n\n".join(items) if items else "No results found"
+    except Exception as e:
+        logger.error(f"execute_web_search error: {e}")
+        return f"Search error: {str(e)}"
+
+# ---------- World Time and News Tools ----------
+async def get_world_time(location: str) -> str:
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            tz_list = (await client.get("http://worldtimeapi.org/api/timezone")).json()
+            match = [tz for tz in tz_list if location.replace(" ", "_").lower() in tz.lower()]
+            if not match:
+                return f"Sorry, I couldn't find timezone for '{location}'. Try a city/country name."
+            tz_data = (await client.get(f"http://worldtimeapi.org/api/timezone/{match[0]}")).json()
+            dt_obj = datetime.fromisoformat(tz_data["datetime"].replace("Z", "+00:00"))
+            return f"The current time in {location.title()} is {dt_obj.strftime('%Y-%m-%d %H:%M:%S')} ({match[0]})."
+    except Exception as e:
+        logger.error(f"get_world_time error: {e}")
+        return f"Error fetching time: {str(e)}"
+
+async def get_latest_news(country_code: str) -> str:
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            url = f"https://newsapi.org/v2/top-headlines?country={country_code.lower()}&apiKey={NEWS_API_KEY}"
+            res = (await client.get(url)).json()
+            if res.get("status") != "ok":
+                return f"Could not fetch news for '{country_code}'."
+            articles = res.get("articles", [])
+            if not articles:
+                return f"No news found for '{country_code}'."
+            headlines = [f"{i+1}. {a['title']} ({a['source']['name']})" for i, a in enumerate(articles[:6])]
+            return "Latest headlines:\n" + "\n".join(headlines)
+    except Exception as e:
+        logger.error(f"get_latest_news error: {e}")
+        return f"Error fetching news: {str(e)}"
+
+# ---------- Tools registry (for agent) ----------
+TOOL_REGISTRY = {
+    "web_search": execute_web_search,
+    "python_interpreter": execute_web_search,  # placeholder; keep original python_interpreter if needed
+    "world_time": get_world_time,
+    "latest_news": get_latest_news
 }
+
+# ---------- History helpers ----------
+async def save_message_to_history(user_id: str, conversation_id: str, role: str, message: str, provider: str = None):
+    if not supabase:
+        logger.warning("Supabase not configured: cannot save history.")
+        return
+    try:
+        record = {
+            "user_id": user_id,
+            "conversation_id": conversation_id,
+            "role": role,
+            "message": message,
+            "provider": provider or DEFAULT_MODEL_NAME,
+            "created_at": datetime.utcnow().isoformat()
+        }
+        supabase.table("chat_history").insert(record).execute()
+    except Exception as e:
+        logger.error(f"save_message_to_history error: {e}")
+
+async def fetch_conversations_for_user(user_id: str, limit: int = 50):
+    if not supabase:
+        logger.warning("Supabase not configured: cannot fetch history.")
+        return []
+    try:
+        res = supabase.table("chat_history") \
+            .select("*") \
+            .eq("user_id", user_id) \
+            .order("created_at", desc=True) \
+            .limit(limit) \
+            .execute()
+        return res.data or []
+    except Exception as e:
+        logger.error(f"fetch_conversations_for_user error: {e}")
+        return []
+
+# ---------- API Endpoints ----------
+
+@app.post("/api/search")
+async def search_endpoint(payload: SearchRequest):
+    q = payload.query
+    logger.info(f"Search request: {q}")
+    result = await execute_web_search(q)
+    return JSONResponse(status_code=200, content={"success": True, "response": result})
+
+@app.get("/api/history")
+async def history_endpoint(user_id: str = Query(...)):
+    """Return conversation summaries for a user_id"""
+    rows = await fetch_conversations_for_user(user_id, limit=200)
+    # group by conversation_id
+    convs = {}
+    for r in rows:
+        cid = r.get("conversation_id") or "default"
+        convs.setdefault(cid, []).append(r)
+    # build summary list
+    summaries = []
+    for cid, msgs in convs.items():
+        last = max(msgs, key=lambda m: m.get("created_at", ""))
+        summaries.append({
+            "conversation_id": cid,
+            "last_message": last.get("message"),
+            "last_role": last.get("role"),
+            "last_time": last.get("created_at"),
+            "message_count": len(msgs)
+        })
+    # sort by last_time desc
+    summaries.sort(key=lambda s: s.get("last_time") or "", reverse=True)
+    return JSONResponse(status_code=200, content={"success": True, "conversations": summaries})
+
+@app.post("/api/history/load")
+async def load_conversation(payload: dict = Body(...)):
+    user_id = payload.get("user_id")
+    conversation_id = payload.get("conversation_id")
+    if not supabase:
+        return JSONResponse(status_code=500, content={"success": False, "error": "Supabase not configured"})
+    try:
+        res = supabase.table("chat_history").select("*").eq("user_id", user_id).eq("conversation_id", conversation_id).order("created_at", asc=True).execute()
+        return JSONResponse(status_code=200, content={"success": True, "messages": res.data or []})
+    except Exception as e:
+        logger.error(f"load_conversation error: {e}")
+        return JSONResponse(status_code=500, content={"success": False, "error": str(e)})
+
+@app.post("/api/chat")
+async def chat_endpoint(request: ChatRequest = Body(...)):
+    """Main chat endpoint with time/news/search routing and history saving"""
+    try:
+        start_time = datetime.utcnow()
+        message = request.message.strip()
+        provider = request.provider
+        personality = request.personality
+        conversation_id = request.conversation_id or str(uuid.uuid4())
+        user_id = request.user_id or f"guest_{uuid.uuid4().hex[:8]}"
+
+        logger.info(f"Chat request from {user_id}, conv {conversation_id}, provider {provider}")
+
+        # Route: time
+        if "time in" in message.lower():
+            location = message.lower().split("time in")[-1].strip()
+            response_text = await get_world_time(location)
+            # save messages
+            await save_message_to_history(user_id, conversation_id, "user", message, provider)
+            await save_message_to_history(user_id, conversation_id, "assistant", response_text, DEFAULT_MODEL_NAME)
+            return JSONResponse(status_code=200, content={"success": True, "response": response_text, "provider": DEFAULT_MODEL_NAME})
+
+        # Route: news
+        if "news in" in message.lower() or "latest news" in message.lower():
+            # naive extraction: take after 'news in'
+            parts = message.lower().split("news in")
+            if len(parts) > 1 and parts[-1].strip():
+                country_code = parts[-1].strip().split()[0]
+            else:
+                # fallback: try find last word
+                country_code = message.lower().split()[-1]
+            response_text = await get_latest_news(country_code)
+            await save_message_to_history(user_id, conversation_id, "user", message, provider)
+            await save_message_to_history(user_id, conversation_id, "assistant", response_text, DEFAULT_MODEL_NAME)
+            return JSONResponse(status_code=200, content={"success": True, "response": response_text, "provider": DEFAULT_MODEL_NAME})
+
+        # Route: web search if message explicitly asks for search
+        if message.lower().startswith("search:") or message.lower().startswith("web:"):
+            query = message.split(":", 1)[1].strip()
+            response_text = await execute_web_search(query)
+            await save_message_to_history(user_id, conversation_id, "user", message, provider)
+            await save_message_to_history(user_id, conversation_id, "assistant", response_text, DEFAULT_MODEL_NAME)
+            return JSONResponse(status_code=200, content={"success": True, "response": response_text, "provider": DEFAULT_MODEL_NAME})
+
+        # Otherwise pass to AI provider
+        messages = build_prompt_context(message, personality)
+        ai_result = await fetch_ai_response(provider, messages)
+        response_text = ai_result["response"]
+        used_provider = ai_result.get("provider", DEFAULT_MODEL_NAME)
+
+        # Save to history
+        await save_message_to_history(user_id, conversation_id, "user", message, used_provider)
+        await save_message_to_history(user_id, conversation_id, "assistant", response_text, used_provider)
+
+        response_time = (datetime.utcnow() - start_time).total_seconds() * 1000
+        return JSONResponse(status_code=200, content=jsonable_encoder({
+            "success": True,
+            "response": response_text,
+            "provider": used_provider,
+            "conversation_id": conversation_id,
+            "user_id": user_id,
+            "time_ms": response_time
+        }))
+
+    except HTTPException as he:
+        logger.error(f"HTTPException in chat_endpoint: {he.detail}")
+        raise
+    except Exception as e:
+        logger.exception("Unexpected error in chat_endpoint")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+# Voice endpoint (unchanged)
+@app.post("/voice")
+async def voice_endpoint(file: UploadFile = File(...)):
+    logger.info("Received voice transcription request")
+    return JSONResponse(status_code=200, content={"success": True, "response": "Mock voice transcription response"})
+
+# Health
+@app.get("/health")
+async def health_check():
+    return JSONResponse(status_code=200, content={"status": "healthy", "timestamp": datetime.utcnow().isoformat()})
+                                 
+
+
+
+
+
+
+
+
+    <!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Quainex AI</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      body { font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial; background:#0a0a0a; color:#eee; }
+      .sidebar { width: 320px; background:#111827; border-right:1px solid #1f2937; }
+      .chatbox { flex:1; display:flex; flex-direction:column; }
+      .message-bubble { max-width:80%; word-wrap:break-word; padding:12px; border-radius:12px; margin:6px 0; }
+      .user { margin-left:auto; background:#16a34a; color:white; border-bottom-right-radius:4px; }
+      .bot { margin-right:auto; background:#1f2937; color:#e5e7eb; border-bottom-left-radius:4px; }
+      .sidebar-item { padding:12px; border-radius:8px; cursor:pointer; }
+      .sidebar-item:hover { background:#0b1220; }
+      .hidden { display:none; }
+    </style>
+  </head>
+  <body class="h-screen flex">
+
+    <!-- Sidebar: history + new chat + search + settings -->
+    <aside class="sidebar flex flex-col p-4 space-y-4">
+      <div class="flex items-center justify-between">
+        <h2 class="text-xl font-bold text-white">Quainex</h2>
+        <div>
+          <button id="settings-btn" class="text-gray-300 hover:text-white"><i class="fas fa-cog"></i></button>
+        </div>
+      </div>
+
+      <div>
+        <button id="new-chat-btn" class="w-full bg-green-600 hover:bg-green-500 text-white py-2 rounded">+ New Chat</button>
+      </div>
+
+      <div>
+        <input id="sidebar-search" placeholder="Search chat history..." class="w-full p-2 rounded bg-dark-700 text-white" />
+      </div>
+
+      <div>
+        <h3 class="text-sm text-gray-400 mb-2">Conversations</h3>
+        <div id="conversations-list" class="space-y-2 overflow-y-auto" style="max-height:50vh"></div>
+      </div>
+
+      <div class="mt-auto">
+        <div class="text-xs text-gray-400">Signed in as</div>
+        <div id="guest-id" class="text-sm font-medium">Guest</div>
+      </div>
+    </aside>
+
+    <!-- Main chat area -->
+    <main class="chatbox flex-1 flex flex-col">
+      <div class="flex items-center p-4 border-b border-gray-800">
+        <input id="global-search" placeholder="Search web (press Enter)" class="flex-1 p-2 rounded bg-transparent border border-gray-700 text-white" />
+        <button id="search-btn" class="ml-2 bg-gray-800 px-3 py-2 rounded"><i class="fas fa-search"></i></button>
+      </div>
+
+      <div id="chat-box" class="flex-1 p-6 overflow-y-auto" style="background:#050608"></div>
+
+      <div class="p-4 border-t border-gray-800 bg-dark-900">
+        <form id="chat-form" class="flex gap-2">
+          <textarea id="chat-input" rows="1" placeholder="Message Quainex..." class="flex-1 p-3 rounded bg-gray-900 text-white resize-none"></textarea>
+          <button type="submit" class="bg-green-600 px-4 rounded text-white"><i class="fas fa-paper-plane"></i></button>
+        </form>
+      </div>
+    </main>
+
+    <!-- Settings Modal -->
+    <div id="settings-modal" class="fixed inset-0 bg-black bg-opacity-60 hidden items-center justify-center">
+      <div class="bg-gray-900 p-6 rounded w-96">
+        <h3 class="text-lg font-semibold mb-4">Settings</h3>
+        <label class="block mb-2 text-sm">AI Model</label>
+        <select id="model-select" class="w-full p-2 mb-4 bg-gray-800 text-white rounded">
+          <option value="brilux">Brilux</option>
+          <option value="openrouter">OpenRouter</option>
+          <option value="groq">Groq</option>
+          <option value="deepseek">DeepSeek</option>
+        </select>
+
+        <label class="block mb-2 text-sm">Personality</label>
+        <select id="personality-select" class="w-full p-2 mb-4 bg-gray-800 text-white rounded">
+          <option value="default">Default</option>
+          <option value="technical">Technical</option>
+          <option value="agent">Agent</option>
+        </select>
+
+        <label class="flex items-center gap-2 mb-4">
+          <input id="tts-toggle" type="checkbox" /> Enable TTS
+        </label>
+
+        <div class="flex justify-end gap-2">
+          <button id="settings-cancel" class="px-3 py-1 rounded bg-gray-700">Cancel</button>
+          <button id="settings-save" class="px-3 py-1 rounded bg-green-600 text-white">Save</button>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      // expose backend URL (change if self-hosted)
+      window.BACKEND_URL = window.BACKEND_URL || "http://localhost:8000";
+    </script>
+
+    <script src="app.js" defer></script>
+  </body>
+</html>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+// app.js
+(() => {
+  const BACKEND = window.BACKEND_URL || "http://localhost:8000";
+
+  // DOM
+  const chatBox = document.getElementById("chat-box");
+  const chatForm = document.getElementById("chat-form");
+  const chatInput = document.getElementById("chat-input");
+  const globalSearch = document.getElementById("global-search");
+  const searchBtn = document.getElementById("search-btn");
+  const conversationsList = document.getElementById("conversations-list");
+  const newChatBtn = document.getElementById("new-chat-btn");
+  const settingsBtn = document.getElementById("settings-btn");
+  const settingsModal = document.getElementById("settings-modal");
+  const settingsCancel = document.getElementById("settings-cancel");
+  const settingsSave = document.getElementById("settings-save");
+  const modelSelect = document.getElementById("model-select");
+  const personalitySelect = document.getElementById("personality-select");
+  const ttsToggle = document.getElementById("tts-toggle");
+  const sidebarSearch = document.getElementById("sidebar-search");
+  const guestIdEl = document.getElementById("guest-id");
+
+  // state
+  let userId = localStorage.getItem("quainex_user") || null;
+  if (!userId) {
+    userId = `guest_${Math.random().toString(36).slice(2,10)}`;
+    localStorage.setItem("quainex_user", userId);
+  }
+  guestIdEl.textContent = userId;
+
+  let conversationId = null;
+  let settings = JSON.parse(localStorage.getItem("quainex_settings") || "{}");
+  settings.model = settings.model || "brilux";
+  settings.personality = settings.personality || "default";
+  settings.tts = settings.tts || false;
+
+  // init settings UI
+  modelSelect.value = settings.model;
+  personalitySelect.value = settings.personality;
+  ttsToggle.checked = settings.tts;
+
+  // Helpers
+  function appendMessage(sender, text, isUser = false) {
+    const wrapper = document.createElement("div");
+    wrapper.className = isUser ? "message-bubble user" : "message-bubble bot";
+    const senderEl = document.createElement("div");
+    senderEl.style.fontSize = "12px";
+    senderEl.style.opacity = "0.8";
+    senderEl.textContent = sender;
+    const content = document.createElement("div");
+    content.style.whiteSpace = "pre-wrap";
+    content.textContent = text;
+    wrapper.appendChild(senderEl);
+    wrapper.appendChild(content);
+    chatBox.appendChild(wrapper);
+    chatBox.scrollTop = chatBox.scrollHeight;
+  }
+
+  async function fetchHistory() {
+    try {
+      const res = await fetch(`${BACKEND}/api/history?user_id=${encodeURIComponent(userId)}`);
+      const data = await res.json();
+      if (!data.success) return;
+      conversationsList.innerHTML = "";
+      data.conversations.forEach(conv => {
+        const el = document.createElement("div");
+        el.className = "sidebar-item";
+        el.innerHTML = `<div class="text-sm font-medium">${conv.last_message?.slice(0,60) || 'New conversation'}</div>
+                        <div class="text-xs text-gray-400">${new Date(conv.last_time).toLocaleString() || ''} • ${conv.message_count} msgs</div>`;
+        el.addEventListener("click", () => loadConversation(conv.conversation_id));
+        conversationsList.appendChild(el);
+      });
+    } catch (e) {
+      console.error("fetchHistory error", e);
+    }
+  }
+
+  async function loadConversation(conversation_id) {
+    conversationId = conversation_id;
+    chatBox.innerHTML = "";
+    try {
+      const res = await fetch(`${BACKEND}/api/history/load`, {
+        method: "POST",
+        headers: {"Content-Type":"application/json"},
+        body: JSON.stringify({user_id: userId, conversation_id})
+      });
+      const data = await res.json();
+      if (!data.success) return;
+      data.messages.forEach(m => appendMessage(m.role === "user" ? "You" : "Quainex", m.message, m.role === "user"));
+    } catch (e) {
+      console.error("loadConversation error", e);
+    }
+  }
+
+  async function sendChat(message) {
+    if (!message) return;
+    appendMessage("You", message, true);
+    chatInput.value = "";
+    const loader = appendMessage("Quainex", "...");
+
+    try {
+      const payload = {
+        message,
+        provider: settings.model === "brilux" ? "openrouter" : settings.model,
+        personality: settings.personality,
+        conversation_id: conversationId,
+        user_id: userId
+      };
+      const res = await fetch(`${BACKEND}/api/chat`, {
+        method: "POST",
+        headers: {"Content-Type":"application/json"},
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+      // remove loader
+      if (loader && loader.parentNode) loader.parentNode.removeChild(loader);
+
+      if (data && data.success) {
+        appendMessage("Quainex", data.response || "No response");
+        // set conversation id from server
+        if (data.conversation_id) conversationId = data.conversation_id;
+        // refresh history list
+        fetchHistory();
+      } else {
+        appendMessage("Quainex", data.error || "Error from server");
+      }
+    } catch (e) {
+      console.error("sendChat error", e);
+      if (loader && loader.parentNode) loader.parentNode.removeChild(loader);
+      appendMessage("Quainex", "Network error. Please try again.");
+    }
+  }
+
+  async function doSearch(query) {
+    appendMessage("You", `Search: ${query}`, true);
+    const loader = appendMessage("Quainex", "Searching...");
+    try {
+      const res = await fetch(`${BACKEND}/api/search`, {
+        method: "POST",
+        headers: {"Content-Type":"application/json"},
+        body: JSON.stringify({query})
+      });
+      const data = await res.json();
+      if (loader && loader.parentNode) loader.parentNode.removeChild(loader);
+      if (data && data.success) {
+        appendMessage("Quainex", data.response || "No results");
+      } else {
+        appendMessage("Quainex", "Search failed");
+      }
+    } catch (e) {
+      console.error("doSearch error", e);
+      if (loader && loader.parentNode) loader.parentNode.removeChild(loader);
+      appendMessage("Quainex", "Search error");
+    }
+  }
+
+  // Event listeners
+  chatForm.addEventListener("submit", (e) => {
+    e.preventDefault();
+    sendChat(chatInput.value.trim());
+  });
+
+  searchBtn.addEventListener("click", () => {
+    const q = globalSearch.value.trim();
+    if (!q) return;
+    doSearch(q);
+    globalSearch.value = "";
+  });
+
+  globalSearch.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      searchBtn.click();
+    }
+  });
+
+  newChatBtn.addEventListener("click", () => {
+    conversationId = null;
+    chatBox.innerHTML = "";
+  });
+
+  // Settings modal
+  settingsBtn.addEventListener("click", () => settingsModal.classList.remove("hidden"));
+  settingsCancel.addEventListener("click", () => settingsModal.classList.add("hidden"));
+  settingsSave.addEventListener("click", () => {
+    settings.model = modelSelect.value;
+    settings.personality = personalitySelect.value;
+    settings.tts = ttsToggle.checked;
+    localStorage.setItem("quainex_settings", JSON.stringify(settings));
+    settingsModal.classList.add("hidden");
+  });
+
+  // Sidebar search for conversations
+  sidebarSearch.addEventListener("input", () => {
+    const q = sidebarSearch.value.toLowerCase();
+    Array.from(conversationsList.children).forEach(item => {
+      const text = item.textContent.toLowerCase();
+      item.style.display = text.includes(q) ? "block" : "none";
+    });
+  });
+
+  // initial load
+  fetchHistory();
+
+  // keep alive / health check (optional)
+  setInterval(() => fetch(`${BACKEND}/health`).catch(()=>{}), 60_000);
+
+})();

@@ -1,0 +1,2 @@
+2025-08-10 19:15:23,899 - httpx - INFO - HTTP Request: DELETE https://ynozdqtrwsbunayrzgbd.supabase.co/rest/v1/chat_history?created_at=lt.2025-07-11T19%3A15%3A22.128321 "HTTP/2 200 OK"
+2025-08-10 19:15:23,905 - __main__ - INFO - Cleaned up 0 old chat records
