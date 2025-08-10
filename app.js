@@ -23,15 +23,22 @@ let mediaRecorder,
 let audio = new Audio();
 const backendBaseUrl = window.BACKEND_URL || "https://quainex.onrender.com";
 
+// ---------- Immediate Event Binding (Prevents Refresh) ----------
+if (chatForm) chatForm.addEventListener("submit", handleFormSubmit);
+if (voiceBtn) voiceBtn.addEventListener("click", handleVoiceInput);
+if (mobileMenuBtn) mobileMenuBtn.addEventListener("click", toggleSidebar);
+if (overlay) overlay.addEventListener("click", toggleSidebar);
+if (providerSelect) providerSelect.addEventListener("change", handleProviderChange);
+
 // ---------- Init ----------
 function init() {
   console.log("[Init] Starting...");
   // Remove existing listeners to avoid duplicates
-  chatForm.removeEventListener("submit", handleFormSubmit);
-  voiceBtn.removeEventListener("click", handleVoiceInput);
-  mobileMenuBtn.removeEventListener("click", toggleSidebar);
-  overlay.removeEventListener("click", toggleSidebar);
-  providerSelect.removeEventListener("change", handleProviderChange);
+  if (chatForm) chatForm.removeEventListener("submit", handleFormSubmit);
+  if (voiceBtn) voiceBtn.removeEventListener("click", handleVoiceInput);
+  if (mobileMenuBtn) mobileMenuBtn.removeEventListener("click", toggleSidebar);
+  if (overlay) overlay.removeEventListener("click", toggleSidebar);
+  if (providerSelect) providerSelect.removeEventListener("change", handleProviderChange);
 
   // Initialize provider from localStorage
   const provider = localStorage.getItem("provider") || "openrouter";
@@ -59,22 +66,24 @@ function updateUserAvatar(username) {
 function setupEventListeners() {
   console.log("[Setup] Attaching event listeners...");
 
-  chatForm.addEventListener("submit", handleFormSubmit);
-  voiceBtn.addEventListener("click", handleVoiceInput);
+  if (chatForm) chatForm.addEventListener("submit", handleFormSubmit);
+  if (voiceBtn) voiceBtn.addEventListener("click", handleVoiceInput);
 
-  newChatBtn.addEventListener("click", handleNewChat);
-  searchBtn.addEventListener("click", handleSearch);
-  settingsBtn.addEventListener("click", handleSettings);
+  if (newChatBtn) newChatBtn.addEventListener("click", handleNewChat);
+  if (searchBtn) searchBtn.addEventListener("click", handleSearch);
+  if (settingsBtn) settingsBtn.addEventListener("click", handleSettings);
 
-  mobileMenuBtn.addEventListener("click", toggleSidebar);
-  overlay.addEventListener("click", toggleSidebar);
+  if (mobileMenuBtn) mobileMenuBtn.addEventListener("click", toggleSidebar);
+  if (overlay) overlay.addEventListener("click", toggleSidebar);
 
-  providerSelect.addEventListener("change", handleProviderChange);
+  if (providerSelect) providerSelect.addEventListener("change", handleProviderChange);
 
-  chatInput.addEventListener("input", () => {
-    chatInput.style.height = "auto";
-    chatInput.style.height = chatInput.scrollHeight + "px";
-  });
+  if (chatInput) {
+    chatInput.addEventListener("input", () => {
+      chatInput.style.height = "auto";
+      chatInput.style.height = chatInput.scrollHeight + "px";
+    });
+  }
 }
 
 // ---------- Form Submission Handler ----------
@@ -93,7 +102,7 @@ async function handleFormSubmit(e) {
     submitBtn.classList.add("opacity-50", "cursor-not-allowed");
   }
 
-  if (welcomeScreen.style.display !== "none") {
+  if (welcomeScreen && welcomeScreen.style.display !== "none") {
     welcomeScreen.style.display = "none";
     chatBox.classList.remove("hidden");
   }
