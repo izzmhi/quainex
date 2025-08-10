@@ -47,176 +47,37 @@
         font-family: 'Inter', sans-serif;
         background-color: #0a0a0a;
       }
-      
-      /* Custom scrollbar */
-      ::-webkit-scrollbar {
-        width: 6px;
-        height: 6px;
-      }
-      ::-webkit-scrollbar-track {
-        background: rgba(255, 255, 255, 0.05);
-      }
-      ::-webkit-scrollbar-thumb {
-        background: rgba(255, 255, 255, 0.1);
-        border-radius: 3px;
-      }
-      ::-webkit-scrollbar-thumb:hover {
-        background: rgba(255, 255, 255, 0.2);
-      }
-      
-      /* Chat bubbles */
-      .message-bubble {
-        position: relative;
-        transition: all 0.3s ease;
-      }
-      .message-bubble:after {
-        content: '';
-        position: absolute;
-        bottom: 0;
-        width: 0;
-        height: 0;
-        border: 10px solid transparent;
-      }
-      .user-bubble:after {
-        right: -10px;
-        border-left-color: #22c55e;
-        border-right: 0;
-      }
-      .bot-bubble:after {
-        left: -10px;
-        border-right-color: #3a3a3a;
-        border-left: 0;
-      }
-      
-      /* Glow effect */
-      .glow-effect {
-        box-shadow: 0 0 15px rgba(34, 197, 94, 0.3);
-      }
-      .glow-effect:hover {
-        box-shadow: 0 0 20px rgba(34, 197, 94, 0.5);
-      }
-      
-      /* Fade in animation */
-      @keyframes fadeIn {
-        from { opacity: 0; transform: translateY(10px); }
-        to { opacity: 1; transform: translateY(0); }
-      }
-      .fade-in {
-        animation: fadeIn 0.3s ease-out forwards;
-      }
-      
-      /* Gradient text */
-      .gradient-text {
-        background: linear-gradient(90deg, #22c55e, #3b82f6);
-        -webkit-background-clip: text;
-        background-clip: text;
-        color: transparent;
-      }
-      
-      /* Universal Sidebar & Overlay behavior */
-      #sidebar {
-        position: fixed;
-        height: 100vh;
-        left: 0;
-        top: 0;
-        width: 256px;
-        transform: translateX(-100%);
-        transition: transform 0.3s ease-in-out;
-        z-index: 50;
-        border-right: 1px solid #2a2a2a;
-        display: flex;
-        flex-direction: column;
-      }
-
-      #sidebar.active {
-        transform: translateX(0);
-      }
-
-      #overlay {
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        background: rgba(0, 0, 0, 0.5);
-        z-index: 40;
-        display: none;
-      }
-      #overlay.active {
-        display: block;
-      }
-
-      /* Base styles for chat screen and input form - centered */
-      #chat-screen {
-        flex: 1;
-        display: flex;
-        flex-direction: column;
-        width: 100%;
-      }
-
-      /* Chat box should be centered and have proper padding */
-      #chat-box {
-        max-width: 4xl;
-        margin-left: auto;
-        margin-right: auto;
-        padding: 1.5rem;
-        padding-bottom: 6rem;
-        width: 100%;
-      }
-
-      /* Chat form container */
-      .fixed-input-container {
-        position: fixed;
-        bottom: 0;
-        left: 0;
-        width: 100%;
-        padding: 1rem 1.5rem;
-        background-color: #0a0a0a;
-        z-index: 40;
-      }
-
-      #chat-form .max-w-4xl {
-        max-width: 56rem;
-        margin-left: auto;
-        margin-right: auto;
-        background-color: #1a1a1a;
-        border-radius: 1.5rem;
-        padding: 0.5rem;
-        border: 1px solid #2a2a2a;
-        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
-      }
-
-      /* Adjust message bubbles */
-      .message-bubble {
-        max-width: 80%;
-        word-wrap: break-word;
-      }
-
-      /* Mobile-specific adjustments */
+      ::-webkit-scrollbar { width: 6px; height: 6px; }
+      ::-webkit-scrollbar-track { background: rgba(255, 255, 255, 0.05); }
+      ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.1); border-radius: 3px; }
+      ::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.2); }
+      .message-bubble { position: relative; transition: all 0.3s ease; }
+      .message-bubble:after { content: ''; position: absolute; bottom: 0; width: 0; height: 0; border: 10px solid transparent; }
+      .user-bubble:after { right: -10px; border-left-color: #22c55e; border-right: 0; }
+      .bot-bubble:after { left: -10px; border-right-color: #3a3a3a; border-left: 0; }
+      .glow-effect { box-shadow: 0 0 15px rgba(34, 197, 94, 0.3); }
+      .glow-effect:hover { box-shadow: 0 0 20px rgba(34, 197, 94, 0.5); }
+      @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+      .fade-in { animation: fadeIn 0.3s ease-out forwards; }
+      .gradient-text { background: linear-gradient(90deg, #22c55e, #3b82f6); -webkit-background-clip: text; background-clip: text; color: transparent; }
+      #sidebar { position: fixed; height: 100vh; left: 0; top: 0; width: 256px; transform: translateX(-100%); transition: transform 0.3s ease-in-out; z-index: 50; border-right: 1px solid #2a2a2a; display: flex; flex-direction: column; }
+      #sidebar.active { transform: translateX(0); }
+      #overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.5); z-index: 40; display: none; }
+      #overlay.active { display: block; }
+      #chat-screen { flex: 1; display: flex; flex-direction: column; width: 100%; }
+      #chat-box { max-width: 4xl; margin-left: auto; margin-right: auto; padding: 1.5rem; padding-bottom: 6rem; width: 100%; }
+      .fixed-input-container { position: fixed; bottom: 0; left: 0; width: 100%; padding: 1rem 1.5rem; background-color: #0a0a0a; z-index: 40; }
+      #chat-form .max-w-4xl { max-width: 56rem; margin-left: auto; margin-right: auto; background-color: #1a1a1a; border-radius: 1.5rem; padding: 0.5rem; border: 1px solid #2a2a2a; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05); }
+      .message-bubble { max-width: 80%; word-wrap: break-word; }
       @media (max-width: 768px) {
-        #chat-box {
-          padding-left: 1rem;
-          padding-right: 1rem;
-          padding-bottom: 6rem;
-        }
-
-        .fixed-input-container {
-          padding: 1rem 1rem 2rem;
-        }
-        
-        #chat-form .max-w-4xl {
-          max-width: 100% !important;
-          border-radius: 1.5rem;
-        }
-
-        .message-bubble {
-          max-width: 90%;
-        }
+        #chat-box { padding-left: 1rem; padding-right: 1rem; padding-bottom: 6rem; }
+        .fixed-input-container { padding: 1rem 1rem 2rem; }
+        #chat-form .max-w-4xl { max-width: 100% !important; border-radius: 1.5rem; }
+        .message-bubble { max-width: 90%; }
       }
     </style>
   </head>
   <body class="bg-dark-900 text-gray-100 h-screen flex flex-col overflow-hidden">
-    <!-- Overlay for mobile sidebar -->
     <div id="overlay"></div>
 
     <header class="flex justify-between items-center p-4 bg-dark-800 border-b border-dark-700">
@@ -253,14 +114,8 @@
             <span class="text-sm font-medium">Search</span>
           </button>
           <h3 class="text-xs font-semibold text-gray-400 uppercase tracking-wider px-2 mb-2">Recent</h3>
-          <div id="chat-history" class="space-y-1">
-            <div class="px-3 py-2 rounded-lg hover:bg-dark-700 cursor-pointer flex items-center justify-between text-gray-300 hover:text-white transition-colors">
-              <span class="truncate"></span>
-              <i class="fas fa-chevron-right text-xs opacity-0 group-hover:opacity-100"></i>
-            </div>
-          </div>
+          <div id="chat-history" class="space-y-1"></div>
         </div>
-        
         <div class="mt-auto pt-4 border-t border-dark-700">
           <button class="w-full text-left p-2.5 rounded-lg hover:bg-dark-700 text-gray-300 hover:text-white transition-colors flex items-center space-x-3">
             <i class="fas fa-cog w-5 text-center"></i>
@@ -282,12 +137,11 @@
         </div>
 
         <div class="fixed-input-container">
-          <form id="chat-form" onsubmit="return false" action="javascript:void(0)" class="max-w-4xl mx-auto flex flex-col items-center">
+          <form id="chat-form" class="max-w-4xl mx-auto flex flex-col items-center">
             <div class="flex items-end w-full gap-2 p-2 bg-dark-800 rounded-2xl md:rounded-3xl border border-dark-700 shadow-xl">
               <button type="button" id="gemini-plus-btn" class="flex-shrink-0 text-gray-400 hover:text-white transition-colors p-2 rounded-full">
                 <i class="fas fa-plus text-lg"></i>
               </button>
-              
               <div class="relative flex-1">
                 <textarea id="chat-input" rows="1" placeholder="Message Quainex..." 
                   class="w-full bg-transparent text-white px-1 py-1 pr-12 rounded-lg focus:outline-none resize-none overflow-hidden placeholder-gray-400"></textarea>
@@ -308,26 +162,6 @@
 
     <script>
       window.BACKEND_URL = "https://quainex.onrender.com";
-
-      const mobileMenuBtn = document.getElementById('mobile-menu-btn');
-      const sidebar = document.getElementById('sidebar');
-      const overlay = document.getElementById('overlay');
-
-      mobileMenuBtn.addEventListener('click', () => {
-        sidebar.classList.toggle('active');
-        overlay.classList.toggle('active');
-      });
-
-      overlay.addEventListener('click', () => {
-        sidebar.classList.remove('active');
-        overlay.classList.remove('active');
-      });
-
-      const userInput = document.getElementById('chat-input');
-      userInput.addEventListener('input', () => {
-        userInput.style.height = 'auto';
-        userInput.style.height = userInput.scrollHeight + 'px';
-      });
     </script>
     <script src="app.js" defer></script>
   </body>
