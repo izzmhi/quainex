@@ -18,8 +18,15 @@ import xml.etree.ElementTree as ET
 import re
 from fastapi.encoders import jsonable_encoder
 from quainexmemory import MemoryManager
+import requests
+
 
 memory = MemoryManager(limit=10)
+
+
+NEWS_API_KEY = "d32c445b4df84f9e8eb63b1f7991e458"  # Your API key
+NEWS_API_URL = "https://newsapi.org/v2/top-headlines"
+
 
 # ---------- Configuration ----------
 load_dotenv()
@@ -47,8 +54,6 @@ API_KEYS = {
     "supabaseurl": os.getenv("SUPABASE_URL"),
     "supabasekey": os.getenv("SUPABASE_KEY")
 }
-
-NEWS_API_KEY = "d32c445b4df84f9e8eb63b1f7991e458"
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -82,36 +87,64 @@ app.add_middleware(
     expose_headers=["*"],
     max_age=600
 )
-# ---------- New Tools ----------
-async def get_world_time(location: str) -> str:
-    """Get current time for any location using WorldTimeAPI"""
+# ---------------- NEWS FUNCTIONS ----------------
+def get_latest_world_news():
+    params = {
+        "language": "en",
+        "pageSize": 5,
+        "apiKey": NEWS_API_KEY
+    }
     try:
-        async with httpx.AsyncClient(timeout=15) as client:
-            tz_list = (await client.get("http://worldtimeapi.org/api/timezone")).json()
-            match = [tz for tz in tz_list if location.replace(" ", "_").lower() in tz.lower()]
-            if not match:
-                return f"❌ Could not find timezone for '{location}'."
-            tz_data = (await client.get(f"http://worldtimeapi.org/api/timezone/{match[0]}")).json()
-            dt_obj = datetime.fromisoformat(tz_data["datetime"].replace("Z", "+00:00"))
-            return f"🕒 The current time in {location.title()} is {dt_obj.strftime('%Y-%m-%d %H:%M:%S')} ({match[0]})."
+        response = requests.get(NEWS_API_URL, params=params)
+        data = response.json()
+        if data.get("status") != "ok":
+            return "Error fetching news: " + data.get("message", "Unknown error")
+        
+        news_list = []
+        for article in data["articles"]:
+            title = article.get("title", "No title")
+            description = article.get("description", "No description")
+            source = article["source"].get("name", "Unknown source")
+            url = article.get("url", "")
+            news_item = f"**{title}** ({source})\n{description}\nRead more: {url}"
+            news_list.append(news_item)
+        return "\n\n".join(news_list)
     except Exception as e:
-        return f"⚠️ Error fetching time: {str(e)}"
+        return f"Error: {e}"
 
-async def get_latest_news(country_code: str) -> str:
-    """Fetch latest news headlines from NewsAPI"""
+@app.get("/api/news/world")
+async def fetch_world_news():
+    news = get_latest_world_news()
+    return {"news": news}
+
+@app.get("/api/news")
+async def fetch_news(country: Optional[str] = None):
+    params = {
+        "language": "en",
+        "pageSize": 5,
+        "apiKey": NEWS_API_KEY
+    }
+    if country:
+        params["country"] = country.lower()
+
     try:
-        async with httpx.AsyncClient(timeout=15) as client:
-            url = f"https://newsapi.org/v2/top-headlines?country={country_code.lower()}&apiKey={NEWS_API_KEY}"
-            res = (await client.get(url)).json()
-            if res.get("status") != "ok":
-                return f"❌ Could not fetch news for '{country_code}'."
-            articles = res.get("articles", [])
-            if not articles:
-                return f"No news found for '{country_code}'."
-            headlines = [f"{i+1}. {a['title']} ({a['source']['name']})" for i, a in enumerate(articles[:5])]
-            return f"📰 Latest news in {country_code.upper()}:\n" + "\n".join(headlines)
+        response = requests.get(NEWS_API_URL, params=params)
+        data = response.json()
+        if data.get("status") != "ok":
+            raise HTTPException(status_code=500, detail=data.get("message", "Error fetching news"))
+
+        news_list = [
+            {
+                "title": article.get("title"),
+                "description": article.get("description"),
+                "source": article["source"].get("name"),
+                "url": article.get("url")
+            }
+            for article in data["articles"]
+        ]
+        return {"news": news_list}
     except Exception as e:
-        return f"⚠️ Error fetching news: {str(e)}"
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # Register all tools

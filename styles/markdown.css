@@ -1,0 +1,36 @@
+.markdown-content {
+  line-height: 1.6;
+}
+
+.markdown-content h1, 
+.markdown-content h2, 
+.markdown-content h3 {
+  margin: 1em 0 0.5em;
+  font-weight: 600;
+}
+
+.markdown-content pre {
+  background: #1e293b;
+  padding: 1rem;
+  border-radius: 0.5rem;
+  overflow-x: auto;
+  margin: 1rem 0;
+}
+
+.markdown-content code {
+  font-family: 'Fira Code', monospace;
+  background: #1e293b80;
+  padding: 0.2em 0.4em;
+  border-radius: 0.3em;
+}
+
+.markdown-content a {
+  color: #60a5fa;
+  text-decoration: underline;
+}
+
+.markdown-content ul, 
+.markdown-content ol {
+  padding-left: 1.5em;
+  margin: 0.5em 0;
+}

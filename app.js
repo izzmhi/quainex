@@ -1,4 +1,3 @@
-// app.js (FULL - matches your index.html)
 
 // ---------- Globals & placeholders ----------
 let chatForm,
