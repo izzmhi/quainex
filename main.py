@@ -17,6 +17,9 @@ from supabase import create_client
 import xml.etree.ElementTree as ET
 import re
 from fastapi.encoders import jsonable_encoder
+from quainexmemory import MemoryManager
+
+memory = MemoryManager(limit=10)
 
 # ---------- Configuration ----------
 load_dotenv()
@@ -593,11 +596,17 @@ class QuainexAgent:
 # ---------- API Endpoints ----------
 @app.post("/api/chat")
 async def chat_endpoint(request: ChatRequest = Body(...)):
-    """Main chat endpoint with enhanced CORS support"""
+    """Main chat endpoint with memory support"""
     try:
         start_time = datetime.now()
         logger.info(f"Received chat request: {request}")
-        
+
+        # Conversation ID (default if not provided)
+        conv_id = request.conversation_id or "default"
+
+        # Save user message to memory
+        memory.add_message(conv_id, "user", request.message)
+
         if request.personality == "agent":
             logger.info("Using agent personality")
             agent = QuainexAgent(request.provider)
@@ -605,23 +614,32 @@ async def chat_endpoint(request: ChatRequest = Body(...)):
             provider = request.provider
         else:
             logger.info(f"Using {request.personality} personality")
-            messages = build_prompt_context(request.message, request.personality)
+
+            # Build prompt with history
+            history = memory.get_history(conv_id)
+            messages = [{"role": "system", "content": get_system_prompt(request.personality)}]
+            messages.extend(history)
+
+            # Get AI response
             result = await fetch_ai_response(request.provider, messages)
             response_text = result["response"]
             provider = result["provider"]
-        
-        # Log to database
+
+        # Save AI reply to memory
+        memory.add_message(conv_id, "assistant", response_text)
+
+        # Log to database (Supabase)
         try:
             db_response = supabase.table("chat_history").insert([
                 {
-                    "user_id": "api_user", 
-                    "role": "user", 
+                    "user_id": "api_user",
+                    "role": "user",
                     "message": request.message,
                     "provider": provider
                 },
                 {
-                    "user_id": "api_user", 
-                    "role": "assistant", 
+                    "user_id": "api_user",
+                    "role": "assistant",
                     "message": response_text,
                     "provider": provider
                 }
@@ -629,10 +647,12 @@ async def chat_endpoint(request: ChatRequest = Body(...)):
             logger.debug(f"Database insert result: {db_response}")
         except Exception as e:
             logger.error(f"Database logging failed: {str(e)}")
-        
+
+        # Response time
         response_time = (datetime.now() - start_time).total_seconds() * 1000
         logger.info(f"Request completed in {response_time:.2f}ms")
-        
+
+        # Send reply to client
         return JSONResponse(
             status_code=status.HTTP_200_OK,
             content=jsonable_encoder({
@@ -646,7 +666,7 @@ async def chat_endpoint(request: ChatRequest = Body(...)):
                 "Access-Control-Allow-Credentials": "true"
             }
         )
-        
+
     except HTTPException as he:
         logger.error(f"HTTPException in chat endpoint: {he.detail}")
         raise
