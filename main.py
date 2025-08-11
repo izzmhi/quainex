@@ -151,7 +151,6 @@ async def fetch_news(country: Optional[str] = None):
 TOOL_REGISTRY = {
     "web_search": None,  # Original implementation will be here
     "python_interpreter": None,  # Original implementation will be here
-    "world_time": get_world_time,
     "latest_news": get_latest_news
 }
 # Startup cleanup
