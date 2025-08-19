@@ -101,7 +101,7 @@
 
     </style>
   </head>
-  <body class="bg-dark-900 text-gray-100 h-screen flex flex-col overflow-hidden">
+  <body class="bg-dark-900 text-gray-100 h-screen flex flex-col">
     <div id="overlay"></div>
 
     <header class="flex justify-between items-center p-4 bg-dark-800 border-b border-dark-700">
@@ -126,7 +126,7 @@
       </div>
     </header>
 
-    <main class="flex flex-1 overflow-hidden relative">
+    <main class="flex flex-1 relative">
       <aside id="sidebar" class="fixed inset-y-0 left-0 z-50 flex-col w-64 bg-dark-800 border-r border-dark-700 p-4 space-y-6 overflow-y-auto transition-transform ease-in-out duration-300">
         <div class="space-y-4">
           <button class="w-full text-left p-2.5 rounded-lg hover:bg-dark-700 text-gray-300 hover:text-white transition-colors flex items-center space-x-3">
@@ -152,15 +152,16 @@
         </div>
       </aside>
 
-      <section id="chat-screen" class="flex-1 flex flex-col w-full">
-        <div class="flex-1 overflow-y-auto p-6 bg-dark-900 pb-24 flex items-center justify-center">
-          <div id="welcome-screen" class="max-w-xl text-center">
-            <h1 class="text-5xl font-bold text-gray-200 mb-8">Hello, how can I help you?</h1>
-          </div>
-          <div id="chat-box" class="max-w-4xl mx-auto space-y-6 hidden"></div>
+      <section id="chat-screen" class="flex-1 flex flex-col w-full h-full">
+        <div class="flex-1 overflow-y-auto p-6 pb-24">
+            <div id="welcome-screen" class="flex h-full items-center justify-center">
+                <div class="max-w-xl text-center">
+                    <h1 class="text-5xl font-bold text-gray-200 mb-8">Hello, how can I help you?</h1>
+                </div>
+            </div>
+            <div id="chat-box" class="max-w-4xl mx-auto space-y-6 hidden"></div>
         </div>
 
-<!-- Profile Modal -->
 <div id="profile-modal" class="fixed inset-0 bg-black bg-opacity-50 backdrop-blur-sm z-50 hidden flex items-center justify-center px-4">
   <div class="bg-dark-800 rounded-xl border border-gray-700 max-w-md w-full p-6 relative shadow-lg transform scale-95 opacity-0 transition-all duration-300" role="dialog" aria-modal="true" aria-labelledby="profile-modal-title">
     <button id="profile-close-btn" class="absolute top-3 right-3 text-gray-400 hover:text-white" aria-label="Close profile modal">
@@ -212,9 +213,7 @@
     </script>
     <script src="app.js" defer></script>
 
-<!-- Add the settings modal HTML -->
 <div id="settings-modal" class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden flex items-center justify-center">
-  <!-- Content will be managed by settings.js -->
-</div>
+  </div>
   </body>
 </html>

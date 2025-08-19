@@ -646,13 +646,14 @@ function handleSettings() {
 
 function toggleSidebar(forceClose = false) {
     if (!sidebar || !overlay) return;
-    const isActive = sidebar.classList.contains('active');
-    if (forceClose) {
-        sidebar.classList.remove('active');
+    const isHidden = sidebar.classList.contains('-translate-x-full');
+
+    if (forceClose || !isHidden) {
+        sidebar.classList.add('-translate-x-full');
         overlay.classList.remove('active');
     } else {
-        sidebar.classList.toggle('active');
-        overlay.classList.toggle('active');
+        sidebar.classList.remove('-translate-x-full');
+        overlay.classList.add('active');
     }
 }
 
