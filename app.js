@@ -644,15 +644,19 @@ function handleSettings() {
   toggleSidebar(true); // Force close sidebar
 }
 
+// THIS IS THE CORRECTED FUNCTION
 function toggleSidebar(forceClose = false) {
     if (!sidebar || !overlay) return;
-    const isHidden = sidebar.classList.contains('-translate-x-full');
+    
+    const isActive = sidebar.classList.contains('active');
 
-    if (forceClose || !isHidden) {
-        sidebar.classList.add('-translate-x-full');
+    if (forceClose || isActive) {
+        // If we need to force it close, or if it's currently active, remove the class
+        sidebar.classList.remove('active');
         overlay.classList.remove('active');
     } else {
-        sidebar.classList.remove('-translate-x-full');
+        // Otherwise, add the class to show it
+        sidebar.classList.add('active');
         overlay.classList.add('active');
     }
 }
