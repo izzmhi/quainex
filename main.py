@@ -1,6 +1,6 @@
 from fastapi import FastAPI, Request, HTTPException, status, Response, UploadFile, File, Body
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
 import os
 import httpx
@@ -19,6 +19,7 @@ import re
 from fastapi.encoders import jsonable_encoder
 from quainexmemory import MemoryManager
 import requests
+import io
 
 
 memory = MemoryManager(limit=10)
@@ -147,12 +148,6 @@ async def fetch_news(country: Optional[str] = None):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# Register all tools
-TOOL_REGISTRY = {
-    "web_search": None,  # Original implementation will be here
-    "python_interpreter": None,  # Original implementation will be here
-    "latest_news": get_latest_world_news
-}
 # Startup cleanup
 @app.on_event("startup")
 async def startup_cleanup():
@@ -254,12 +249,17 @@ TOOLS_SCHEMA = """
     </tool>
     <tool>
         <name>latest_news</name>
-        <description>Get the latest news headlines for a country</description>
+        <description>Get the latest world news headlines</description>
+        <parameters></parameters>
+    </tool>
+    <tool>
+        <name>generate_image</name>
+        <description>Generates an image based on a descriptive text prompt.</description>
         <parameters>
             <param>
-                <name>country_code</name>
+                <name>prompt</name>
                 <type>string</type>
-                <description>The 2-letter country code (e.g., us, gb, gh)</description>
+                <description>A detailed description of the image to generate.</description>
             </param>
         </parameters>
     </tool>
@@ -523,9 +523,40 @@ async def execute_python_code(code: str) -> str:
     except Exception as e:
         return f"Execution error: {str(e)}"
 
+async def execute_image_generation(prompt: str) -> str:
+    """Generates an image using OpenRouter's Stable Diffusion model."""
+    if not API_KEYS.get("openrouter"):
+        return "Error: OpenRouter API key not configured."
+    try:
+        async with httpx.AsyncClient(timeout=120) as client:
+            response = await client.post(
+                "https://openrouter.ai/api/v1/images/generations",
+                headers={
+                    "Authorization": f"Bearer {API_KEYS['openrouter']}",
+                    "HTTP-Referer": "https://quainexai.onrender.com",
+                    "X-Title": "Quainex AI"
+                },
+                json={
+                    "model": "stabilityai/stable-diffusion-3",
+                    "prompt": prompt,
+                    "n": 1,
+                    "size": "1024x1024"
+                }
+            )
+            response.raise_for_status()
+            data = response.json()
+            image_url = data['data'][0]['url']
+            return f"Image generated successfully. You can view it here: {image_url}"
+    except Exception as e:
+        logger.error(f"Image generation failed: {str(e)}")
+        return f"Sorry, I was unable to generate the image. Error: {str(e)}"
+
+
 TOOL_REGISTRY = {
     "web_search": execute_web_search,
-    "python_interpreter": execute_python_code
+    "python_interpreter": execute_python_code,
+    "latest_news": get_latest_world_news,
+    "generate_image": execute_image_generation
 }
 
 # ---------- Agent Implementation ----------
@@ -593,15 +624,26 @@ class QuainexAgent:
         tool_match = re.search(r'<tool_call>(.*?)</tool_call>', response_text, re.DOTALL)
         if tool_match:
             try:
-                tool_xml = ET.fromstring(f"<root>{tool_match.group(1)}</root>")
-                result["tool_name"] = tool_xml.find("tool_name").text.strip()
+                tool_xml_string = tool_match.group(1).strip()
+                # A common issue is the model generating un-escaped ampersands.
+                tool_xml_string = tool_xml_string.replace('&', '&amp;')
+                
+                # Check for parameter-less tools
+                tool_name_match = re.search(r'<tool_name>([^<]+)</tool_name>', tool_xml_string)
+                if tool_name_match:
+                    result["tool_name"] = tool_name_match.group(1).strip()
+                else: # Should not happen if schema is followed
+                    return result 
+
+                tool_xml = ET.fromstring(f"<root>{tool_xml_string}</root>")
                 params = tool_xml.find("parameters")
                 if params is not None:
                     for param in params:
                         result["tool_params"][param.tag] = param.text.strip() if param.text else ""
             except ET.ParseError as e:
-                logger.error(f"Failed to parse tool call: {str(e)}")
-        
+                logger.error(f"Failed to parse tool call XML: {str(e)}")
+                logger.error(f"Malformed XML string was: {tool_match.group(1)}")
+
         # If no tool call, treat as final answer
         if not result["tool_name"]:
             # Clean the response by removing any XML tags
@@ -618,7 +660,11 @@ class QuainexAgent:
         logger.info(f"Executing tool: {tool_name} with params: {params}")
         try:
             tool_func = TOOL_REGISTRY[tool_name]
-            result = await tool_func(**params)
+            # Check if function is async
+            if asyncio.iscoroutinefunction(tool_func):
+                result = await tool_func(**params)
+            else:
+                result = tool_func(**params)
             return f"<tool_name>{tool_name}</tool_name>\n<result>{result}</result>"
         except Exception as e:
             error_msg = f"Tool execution failed: {str(e)}"
@@ -711,29 +757,77 @@ async def chat_endpoint(request: ChatRequest = Body(...)):
 
 @app.post("/voice")
 async def voice_endpoint(file: UploadFile = File(...)):
-    """Voice transcription endpoint with proper CORS handling"""
+    """Transcribes audio using Groq and gets a chat response."""
+    if not clients.get("groq"):
+        raise HTTPException(status_code=500, detail="Groq client not configured")
+
+    logger.info("Received voice transcription request")
     try:
-        logger.info("Received voice transcription request")
-        # In a real implementation, process the audio file here
-        # For now, return a mock response
+        # Prepare the file for transcription
+        files = { "file": (file.filename, await file.read(), file.content_type) }
+        payload = { "model": "whisper-large-v3" }
+        headers = { "Authorization": f"Bearer {API_KEYS['groq']}" }
+
+        # Call Groq transcription API
+        async with httpx.AsyncClient(timeout=60) as client:
+            response = await client.post(
+                "https://api.groq.com/openai/v1/audio/transcriptions",
+                files=files,
+                data=payload,
+                headers=headers
+            )
+            response.raise_for_status()
+            transcription_data = response.json()
+            transcript = transcription_data.get("text")
+
+        if not transcript:
+            raise HTTPException(status_code=500, detail="Transcription failed")
+
+        logger.info(f"Transcript: {transcript}")
+
+        # Now, get a response from the AI using the transcript
+        chat_req = ChatRequest(message=transcript, provider="groq")
+        chat_response = await chat_endpoint(chat_req)
         
+        # The chat_endpoint returns a JSONResponse, we need the content
+        response_content = json.loads(chat_response.body.decode())
+        response_content["transcript"] = transcript # Add transcript to the response
+
         return JSONResponse(
             status_code=status.HTTP_200_OK,
-            content={
-                "success": True,
-                "response": "This is a mock response from voice transcription"
-            },
-            headers={
-                "Access-Control-Allow-Origin": "*",
-                "Access-Control-Allow-Credentials": "true"
-            }
+            content=response_content
         )
+
     except Exception as e:
         logger.error(f"Error in voice endpoint: {str(e)}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Voice processing failed"
+            detail=f"Voice processing failed: {str(e)}"
         )
+
+
+@app.post("/api/tts")
+async def tts_endpoint(request: TTSRequest):
+    """Generates audio from text using ElevenLabs."""
+    if not clients.get("elevenlabs"):
+        raise HTTPException(status_code=500, detail="ElevenLabs client not configured.")
+
+    try:
+        # Generate audio stream
+        audio_stream = clients["elevenlabs"].generate(
+            text=request.text,
+            voice=request.voice,
+            model=request.model,
+            stream=True
+        )
+
+        # Stream the audio back to the client
+        return StreamingResponse(audio_stream, media_type="audio/mpeg")
+
+    except Exception as e:
+        logger.error(f"TTS generation failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to generate audio.")
+
 
 # Developer API endpoints
 @app.post("/api/developers/register")
