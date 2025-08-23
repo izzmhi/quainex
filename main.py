@@ -20,14 +20,10 @@ from fastapi.encoders import jsonable_encoder
 from quainexmemory import MemoryManager
 import requests
 import io
+import uvicorn # <-- Missing import added
 
-
+# Initialize MemoryManager
 memory = MemoryManager(limit=10)
-
-
-NEWS_API_KEY = "d32c445b4df84f9e8eb63b1f7991e458"  # Your API key
-NEWS_API_URL = "https://newsapi.org/v2/top-headlines"
-
 
 # ---------- Configuration ----------
 load_dotenv()
@@ -53,8 +49,11 @@ API_KEYS = {
     "serper": os.getenv("SERPER_API_KEY"),
     "deepseek": os.getenv("DEEPSEEK_API_KEY"),
     "supabaseurl": os.getenv("SUPABASE_URL"),
-    "supabasekey": os.getenv("SUPABASE_KEY")
+    "supabasekey": os.getenv("SUPABASE_KEY"),
+    "newsapi": os.getenv("NEWS_API_KEY") # <-- API Key loaded from .env
 }
+
+NEWS_API_URL = "https://newsapi.org/v2/top-headlines"
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -90,13 +89,16 @@ app.add_middleware(
 )
 # ---------------- NEWS FUNCTIONS ----------------
 def get_latest_world_news():
+    if not API_KEYS.get("newsapi"):
+        return "Error: News API key not configured."
     params = {
         "language": "en",
         "pageSize": 5,
-        "apiKey": NEWS_API_KEY
+        "apiKey": API_KEYS["newsapi"]
     }
     try:
         response = requests.get(NEWS_API_URL, params=params)
+        response.raise_for_status()
         data = response.json()
         if data.get("status") != "ok":
             return "Error fetching news: " + data.get("message", "Unknown error")
@@ -109,9 +111,10 @@ def get_latest_world_news():
             url = article.get("url", "")
             news_item = f"**{title}** ({source})\n{description}\nRead more: {url}"
             news_list.append(news_item)
-        return "\n\n".join(news_list)
+        return "\n\n".join(news_list) if news_list else "No news found."
     except Exception as e:
-        return f"Error: {e}"
+        logger.error(f"Error fetching news: {e}")
+        return f"Error: Could not retrieve news. {e}"
 
 @app.get("/api/news/world")
 async def fetch_world_news():
@@ -120,10 +123,12 @@ async def fetch_world_news():
 
 @app.get("/api/news")
 async def fetch_news(country: Optional[str] = None):
+    if not API_KEYS.get("newsapi"):
+        raise HTTPException(status_code=500, detail="News API key not configured.")
     params = {
         "language": "en",
         "pageSize": 5,
-        "apiKey": NEWS_API_KEY
+        "apiKey": API_KEYS["newsapi"]
     }
     if country:
         params["country"] = country.lower()
@@ -243,7 +248,7 @@ TOOLS_SCHEMA = """
             <param>
                 <name>location</name>
                 <type>string</type>
-                <description>The city or country name</description>
+                <description>The city or country name (e.g., 'Paris' or 'Japan')</description>
             </param>
         </parameters>
     </tool>
@@ -297,8 +302,7 @@ PERSONALITIES = {
     },
     "default": {
         "name": "Standard Assistant",
-        "system_prompt": "You are Quainex, a helpful AI assistant. Provide clear, accurate responses."
-        "You are Quainex, you were built by Bright SecureTech. And the founder is called Bright Quainoo"
+        "system_prompt": "You are Quainex, a helpful AI assistant. Provide clear, accurate responses. You were built by Bright SecureTech, and the founder is called Bright Quainoo."
     },
 
     "technical": {
@@ -416,12 +420,10 @@ DEFAULT_MODEL_NAME = "brilux"    # Friendly AI model name
 async def fetch_ai_response(provider: str, messages: list, timeout: int = 60) -> dict:
     """Get AI response with fallback logic"""
 
-    # If provider is invalid or not set, use Brilux
     if not provider or provider not in PROVIDER_FALLBACK_ORDER:
-        logger.warning(f"defaulting to Brilux ({DEFAULT_PROVIDER})")
+        logger.warning(f"Defaulting to Brilux ({DEFAULT_PROVIDER})")
         provider = DEFAULT_PROVIDER
 
-    # Try requested (or default) provider first
     result = await query_provider(provider, messages, timeout)
     if result["ok"]:
         return {
@@ -430,12 +432,12 @@ async def fetch_ai_response(provider: str, messages: list, timeout: int = 60) ->
             "provider": DEFAULT_MODEL_NAME if provider == DEFAULT_PROVIDER else provider
         }
 
-    # Fallback
     for fallback in [p for p in PROVIDER_FALLBACK_ORDER if p != provider]:
         if not API_KEYS.get(fallback):
             continue
         result = await query_provider(fallback, messages, timeout)
         if result["ok"]:
+            logger.warning(f"Fell back to provider: {fallback}")
             return {
                 "success": True,
                 "response": result["response"],
@@ -445,7 +447,7 @@ async def fetch_ai_response(provider: str, messages: list, timeout: int = 60) ->
 
     raise HTTPException(
         status_code=502,
-        detail="Failed to respond"
+        detail="All AI providers failed to respond."
     )
 
 # ---------- Tool Implementations ----------
@@ -455,14 +457,14 @@ async def execute_web_search(query: str) -> str:
         return "Error: Search API not configured"
     
     try:
-        headers = {"X-API-KEY": API_KEYS["serper"]}
-        payload = {"q": query, "gl": "us", "hl": "en"}
+        headers = {"X-API-KEY": API_KEYS["serper"], "Content-Type": "application/json"}
+        payload = json.dumps({"q": query, "gl": "us", "hl": "en"})
         
         async with httpx.AsyncClient(timeout=30) as client:
             response = await client.post(
                 "https://google.serper.dev/search",
                 headers=headers,
-                json=payload
+                content=payload
             )
             response.raise_for_status()
             data = response.json()
@@ -482,43 +484,36 @@ async def execute_web_search(query: str) -> str:
         return f"Search error: {str(e)}"
 
 async def execute_python_code(code: str) -> str:
-    """Safely execute Python code (sandboxed)"""
-    # Security checks
+    """
+    Safely execute Python code.
+    NOTE: This sandbox is basic. For production, use a more secure solution 
+    like Docker containers or a dedicated sandboxing library.
+    """
     blocked_keywords = [
         'import', 'open', 'os', 'sys', 'subprocess', 
-        'exec', 'eval', 'delete', 'write'
+        'exec', 'eval', 'delete', 'write', 'input'
     ]
     
     if any(re.search(rf'\b{kw}\b', code) for kw in blocked_keywords):
-        return "Error: Code contains restricted keywords"
+        return "Error: Code contains restricted keywords for security reasons."
     
     try:
-        # Create restricted globals
-        restricted_globals = {
+        output_capture = io.StringIO()
+        
+        # Create a safe execution environment
+        safe_globals = {
             '__builtins__': {
-                'range': range,
-                'len': len,
-                'str': str,
-                'int': int,
-                'float': float,
-                'list': list,
-                'dict': dict,
-                'tuple': tuple,
-                'set': set,
-                'sum': sum,
-                'min': min,
-                'max': max
+                'print': lambda *args, **kwargs: print(*args, file=output_capture, **kwargs),
+                'range': range, 'len': len, 'str': str, 'int': int, 'float': float,
+                'list': list, 'dict': dict, 'tuple': tuple, 'set': set, 'sum': sum,
+                'min': min, 'max': max, 'abs': abs, 'round': round, 'pow': pow
             }
         }
         
-        # Execute in isolated namespace
-        local_vars = {}
-        exec(code, restricted_globals, local_vars)
+        exec(code, safe_globals)
         
-        # Get the result
-        if '_result' in local_vars:
-            return str(local_vars['_result'])
-        return "Code executed (no result captured)"
+        result = output_capture.getvalue()
+        return result if result else "Code executed successfully with no printed output."
         
     except Exception as e:
         return f"Execution error: {str(e)}"
@@ -551,12 +546,42 @@ async def execute_image_generation(prompt: str) -> str:
         logger.error(f"Image generation failed: {str(e)}")
         return f"Sorry, I was unable to generate the image. Error: {str(e)}"
 
+async def execute_world_time(location: str) -> str:
+    """Gets the current time for a specified location using WorldTimeAPI."""
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            # First, try to find a timezone for the location
+            response = await client.get(f"http://worldtimeapi.org/api/timezone/{location}")
+            
+            # If that fails, it might be an area, try to auto-detect
+            if response.status_code != 200:
+                 response = await client.get(f"http://worldtimeapi.org/api/ip") # Fallback to IP
+                 if response.status_code != 200:
+                    return f"Error: Could not find a valid timezone for '{location}'."
+
+            data = response.json()
+            datetime_str = data.get('datetime')
+            timezone = data.get('timezone')
+            
+            if not datetime_str or not timezone:
+                return "Error: Invalid response from time API."
+
+            # Parse the datetime string and format it nicely
+            dt_object = datetime.fromisoformat(datetime_str)
+            formatted_time = dt_object.strftime('%A, %B %d, %Y, %I:%M:%S %p')
+            
+            return f"The current time in {timezone} is {formatted_time}."
+
+    except Exception as e:
+        logger.error(f"World time tool failed for '{location}': {str(e)}")
+        return f"Error: Could not retrieve the time for '{location}'. {str(e)}"
 
 TOOL_REGISTRY = {
     "web_search": execute_web_search,
     "python_interpreter": execute_python_code,
     "latest_news": get_latest_world_news,
-    "generate_image": execute_image_generation
+    "generate_image": execute_image_generation,
+    "world_time": execute_world_time # <-- Implemented tool added to registry
 }
 
 # ---------- Agent Implementation ----------
@@ -573,7 +598,6 @@ class QuainexAgent:
         for loop in range(self.max_loops):
             logger.info(f"Agent loop {loop + 1}/{self.max_loops}")
             
-            # Get AI response
             try:
                 response = await fetch_ai_response(self.provider, self.history)
                 ai_response = response["response"]
@@ -582,15 +606,12 @@ class QuainexAgent:
                 logger.error(f"Agent failed to get response: {str(e)}")
                 return f"Agent error: {str(e)}"
             
-            # Parse the response
             parsed = self.parse_response(ai_response)
             
-            # Handle final answer
             if parsed["final_answer"]:
                 logger.info("Agent completed successfully")
                 return parsed["final_answer"]
             
-            # Handle tool call
             if parsed["tool_name"]:
                 tool_result = await self.execute_tool(
                     parsed["tool_name"],
@@ -601,10 +622,10 @@ class QuainexAgent:
                     "content": f"<tool_result>\n{tool_result}\n</tool_result>"
                 })
             else:
-                logger.warning("Agent response missing both answer and tool call")
-                return "Agent failed to provide a valid response"
+                logger.warning("Agent response missing both answer and tool call; treating as final answer.")
+                return ai_response
         
-        return "Agent reached maximum loops without completing the task"
+        return "Agent reached maximum loops without completing the task. Please try rephrasing your request."
     
     def parse_response(self, response_text: str) -> dict:
         """Parse the AI response for thinking, tools, and answers"""
@@ -615,38 +636,35 @@ class QuainexAgent:
             "final_answer": None
         }
         
-        # Extract thinking
         thinking_match = re.search(r'<thinking>(.*?)</thinking>', response_text, re.DOTALL)
         if thinking_match:
             result["thinking"] = thinking_match.group(1).strip()
         
-        # Extract tool call
         tool_match = re.search(r'<tool_call>(.*?)</tool_call>', response_text, re.DOTALL)
         if tool_match:
             try:
                 tool_xml_string = tool_match.group(1).strip()
-                # A common issue is the model generating un-escaped ampersands.
                 tool_xml_string = tool_xml_string.replace('&', '&amp;')
                 
-                # Check for parameter-less tools
                 tool_name_match = re.search(r'<tool_name>([^<]+)</tool_name>', tool_xml_string)
                 if tool_name_match:
                     result["tool_name"] = tool_name_match.group(1).strip()
-                else: # Should not happen if schema is followed
+                else: 
                     return result 
 
-                tool_xml = ET.fromstring(f"<root>{tool_xml_string}</root>")
-                params = tool_xml.find("parameters")
-                if params is not None:
-                    for param in params:
-                        result["tool_params"][param.tag] = param.text.strip() if param.text else ""
-            except ET.ParseError as e:
-                logger.error(f"Failed to parse tool call XML: {str(e)}")
-                logger.error(f"Malformed XML string was: {tool_match.group(1)}")
+                # Using regex for simpler parsing of parameters
+                params_match = re.search(r'<parameters>(.*?)</parameters>', tool_xml_string, re.DOTALL)
+                if params_match:
+                    params_str = params_match.group(1)
+                    param_tags = re.findall(r'<([^>]+)>([^<]*)</\1>', params_str)
+                    for tag, value in param_tags:
+                        result["tool_params"][tag.strip()] = value.strip()
 
-        # If no tool call, treat as final answer
+            except Exception as e:
+                logger.error(f"Failed to parse tool call: {str(e)}")
+                logger.error(f"Malformed content was: {tool_match.group(1)}")
+
         if not result["tool_name"]:
-            # Clean the response by removing any XML tags
             clean_text = re.sub(r'<[^>]+>', '', response_text).strip()
             result["final_answer"] = clean_text
         
@@ -660,14 +678,13 @@ class QuainexAgent:
         logger.info(f"Executing tool: {tool_name} with params: {params}")
         try:
             tool_func = TOOL_REGISTRY[tool_name]
-            # Check if function is async
             if asyncio.iscoroutinefunction(tool_func):
                 result = await tool_func(**params)
             else:
                 result = tool_func(**params)
             return f"<tool_name>{tool_name}</tool_name>\n<result>{result}</result>"
         except Exception as e:
-            error_msg = f"Tool execution failed: {str(e)}"
+            error_msg = f"Tool '{tool_name}' execution failed: {str(e)}"
             logger.error(error_msg)
             return f"<error>{error_msg}</error>"
 
@@ -677,60 +694,42 @@ async def chat_endpoint(request: ChatRequest = Body(...)):
     """Main chat endpoint with memory support"""
     try:
         start_time = datetime.now()
-        logger.info(f"Received chat request: {request}")
+        logger.info(f"Received chat request: {request.model_dump_json()}")
 
-        # Conversation ID (default if not provided)
         conv_id = request.conversation_id or "default"
-
-        # Save user message to memory
         memory.add_message(conv_id, "user", request.message)
+        provider = request.provider
 
         if request.personality == "agent":
             logger.info("Using agent personality")
-            agent = QuainexAgent(request.provider)
+            agent = QuainexAgent(provider)
             response_text = await agent.run(request.message)
-            provider = request.provider
         else:
             logger.info(f"Using {request.personality} personality")
-
-            # Build prompt with history
             history = memory.get_history(conv_id)
-            messages = [{"role": "system", "content": get_system_prompt(request.personality)}]
-            messages.extend(history)
-
-            # Get AI response
-            result = await fetch_ai_response(request.provider, messages)
+            messages = build_prompt_context(request.message, request.personality, history)
+            result = await fetch_ai_response(provider, messages)
             response_text = result["response"]
-            provider = result["provider"]
+            provider = result.get("provider", provider)
 
-        # Save AI reply to memory
         memory.add_message(conv_id, "assistant", response_text)
 
-        # Log to database (Supabase)
         try:
             db_response = supabase.table("chat_history").insert([
-                {
-                    "user_id": "api_user",
-                    "role": "user",
-                    "message": request.message,
-                    "provider": provider
-                },
-                {
-                    "user_id": "api_user",
-                    "role": "assistant",
-                    "message": response_text,
-                    "provider": provider
-                }
+                { "user_id": "api_user", "role": "user", "message": request.message, "provider": provider },
+                { "user_id": "api_user", "role": "assistant", "message": response_text, "provider": provider }
             ]).execute()
-            logger.debug(f"Database insert result: {db_response}")
+            if db_response.data:
+                 logger.debug(f"Logged {len(db_response.data)} records to database.")
+            else:
+                 logger.warning(f"Database logging failed. Response: {db_response.status_code} - {db_response.error}")
+
         except Exception as e:
             logger.error(f"Database logging failed: {str(e)}")
 
-        # Response time
         response_time = (datetime.now() - start_time).total_seconds() * 1000
         logger.info(f"Request completed in {response_time:.2f}ms")
 
-        # Send reply to client
         return JSONResponse(
             status_code=status.HTTP_200_OK,
             content=jsonable_encoder({
@@ -738,11 +737,7 @@ async def chat_endpoint(request: ChatRequest = Body(...)):
                 "response": response_text,
                 "provider": provider,
                 "time_ms": response_time
-            }),
-            headers={
-                "Access-Control-Allow-Origin": "*",
-                "Access-Control-Allow-Credentials": "true"
-            }
+            })
         )
 
     except HTTPException as he:
@@ -763,12 +758,10 @@ async def voice_endpoint(file: UploadFile = File(...)):
 
     logger.info("Received voice transcription request")
     try:
-        # Prepare the file for transcription
         files = { "file": (file.filename, await file.read(), file.content_type) }
         payload = { "model": "whisper-large-v3" }
         headers = { "Authorization": f"Bearer {API_KEYS['groq']}" }
 
-        # Call Groq transcription API
         async with httpx.AsyncClient(timeout=60) as client:
             response = await client.post(
                 "https://api.groq.com/openai/v1/audio/transcriptions",
@@ -781,17 +774,15 @@ async def voice_endpoint(file: UploadFile = File(...)):
             transcript = transcription_data.get("text")
 
         if not transcript:
-            raise HTTPException(status_code=500, detail="Transcription failed")
+            raise HTTPException(status_code=500, detail="Transcription failed to return text.")
 
         logger.info(f"Transcript: {transcript}")
 
-        # Now, get a response from the AI using the transcript
         chat_req = ChatRequest(message=transcript, provider="groq")
         chat_response = await chat_endpoint(chat_req)
         
-        # The chat_endpoint returns a JSONResponse, we need the content
         response_content = json.loads(chat_response.body.decode())
-        response_content["transcript"] = transcript # Add transcript to the response
+        response_content["transcript"] = transcript
 
         return JSONResponse(
             status_code=status.HTTP_200_OK,
@@ -813,23 +804,17 @@ async def tts_endpoint(request: TTSRequest):
         raise HTTPException(status_code=500, detail="ElevenLabs client not configured.")
 
     try:
-        # Generate audio stream
         audio_stream = clients["elevenlabs"].generate(
             text=request.text,
             voice=request.voice,
             model=request.model,
             stream=True
         )
-
-        # Stream the audio back to the client
         return StreamingResponse(audio_stream, media_type="audio/mpeg")
-
     except Exception as e:
         logger.error(f"TTS generation failed: {str(e)}")
         raise HTTPException(status_code=500, detail="Failed to generate audio.")
 
-
-# Developer API endpoints
 @app.post("/api/developers/register")
 async def register_developer(data: DeveloperAPIKey):
     """Register a new developer and issue API key"""
@@ -839,10 +824,6 @@ async def register_developer(data: DeveloperAPIKey):
             "success": True,
             "api_key": f"quainex_dev_{hash(data.email)}",
             "rate_limit": "100/day"
-        },
-        headers={
-            "Access-Control-Allow-Origin": "*",
-            "Access-Control-Allow-Credentials": "true"
         }
     )
 
@@ -859,14 +840,9 @@ async def list_providers():
                 }
                 for provider in PROVIDER_FALLBACK_ORDER
             ]
-        },
-        headers={
-            "Access-Control-Allow-Origin": "*",
-            "Access-Control-Allow-Credentials": "true"
         }
     )
 
-# Health check endpoint
 @app.get("/health")
 async def health_check():
     """System health check"""
@@ -879,10 +855,6 @@ async def health_check():
                 provider: "active" if API_KEYS.get(provider) else "inactive"
                 for provider in PROVIDER_FALLBACK_ORDER
             }
-        },
-        headers={
-            "Access-Control-Allow-Origin": "*",
-            "Access-Control-Allow-Credentials": "true"
         }
     )
 
@@ -895,10 +867,6 @@ async def http_exception_handler(request: Request, exc: HTTPException):
             "success": False,
             "error": exc.detail,
             "code": exc.status_code
-        },
-        headers={
-            "Access-Control-Allow-Origin": "*",
-            "Access-Control-Allow-Credentials": "true"
         }
     )
 
@@ -911,14 +879,10 @@ async def generic_exception_handler(request: Request, exc: Exception):
             "success": False,
             "error": "Internal server error",
             "code": 500
-        },
-        headers={
-            "Access-Control-Allow-Origin": "*",
-            "Access-Control-Allow-Credentials": "true"
         }
     )
 
 # ---------- Main Entry ----------
 if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    port = int(os.environ.get("PORT", 8000))
+    uvicorn.run("main:app", host="0.0.0.0", port=port, reload=False)
