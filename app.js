@@ -644,18 +644,18 @@ function handleSettings() {
   toggleSidebar(true); // Force close sidebar
 }
 
-// ========== THIS IS THE CORRECTED FUNCTION ==========
+// THIS IS THE CORRECTED FUNCTION
 function toggleSidebar(forceClose = false) {
     if (!sidebar || !overlay) return;
-
+    
     const isActive = sidebar.classList.contains('active');
 
     if (forceClose || isActive) {
-        // If we need to force it close, or if it's currently active, DEACTIVATE
+        // If we need to force it close, or if it's currently active, remove the class
         sidebar.classList.remove('active');
         overlay.classList.remove('active');
     } else {
-        // Otherwise (it's inactive and we are not forcing it close), ACTIVATE
+        // Otherwise, add the class to show it
         sidebar.classList.add('active');
         overlay.classList.add('active');
     }

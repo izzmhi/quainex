@@ -1,219 +1,386 @@
 <!DOCTYPE html>
-<html lang="en">
-  <head>
+<html lang="en" class="dark">
+<head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Quainex AI</title>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- ICONS & FONTS -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+
+    <!-- LIBRARIES (Tailwind, Markdown, Code Highlighting) -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+
+    <!-- TAILWIND CONFIG -->
     <script>
       tailwind.config = {
+        darkMode: 'class',
         theme: {
           extend: {
+            fontFamily: { sans: ['Inter', 'sans-serif'], mono: ['Space Mono', 'monospace'] },
             colors: {
-              primary: {
-                50: '#f0fdf4',
-                100: '#dcfce7',
-                200: '#bbf7d0',
-                300: '#86efac',
-                400: '#4ade80',
-                500: '#22c55e',
-                600: '#16a34a',
-                700: '#15803d',
-                800: '#166534',
-                900: '#14532d',
-              },
-              dark: {
-                900: '#0a0a0a',
-                800: '#1a1a1a',
-                700: '#2a2a2a',
-                600: '#3a3a3a',
-                500: '#4a4a4a',
-              }
+              'primary': '#00dd93', 'primary-hover': '#00c482', 'gray-base': '#0d1117',
+              'gray-bg': '#161b22', 'gray-ui': '#21262d', 'border-color': 'rgba(48, 54, 61, 0.8)',
+              'text-primary': '#c9d1d9', 'text-secondary': '#8b949e',
             },
-            fontFamily: {
-              sans: ['Inter', 'ui-sans-serif', 'system-ui'],
-              mono: ['Fira Code', 'monospace']
-            }
+            boxShadow: { 'glow': '0 0 25px rgba(0, 221, 147, 0.15)' }
           }
         }
       }
     </script>
+
+    <!-- CUSTOM STYLES -->
     <style>
-      @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
-      @import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500&display=swap');
+      body { background-color: #0d1117; font-family: 'Inter', sans-serif; }
+      .aurora-background {
+        position: fixed; top: 0; left: 0; width: 100%; height: 100vh;
+        background: radial-gradient(at 20% 20%, hsla(157,100%,50%,0.15) 0px, transparent 50%),
+                    radial-gradient(at 80% 20%, hsla(210,100%,50%,0.1) 0px, transparent 50%),
+                    radial-gradient(at 20% 80%, hsla(280,100%,50%,0.1) 0px, transparent 50%),
+                    radial-gradient(at 80% 80%, hsla(350,100%,50%,0.1) 0px, transparent 50%);
+        animation: aurora 20s ease-in-out infinite alternate; z-index: -1;
+      }
+      @keyframes aurora { from { transform: scale(1) rotate(0deg); } to { transform: scale(1.5) rotate(90deg); } }
       
-      body {
-        font-family: 'Inter', sans-serif;
-        background-color: #0a0a0a;
+      #sidebar, .modal-content, #chat-form-container {
+        background: rgba(13, 17, 23, 0.6); backdrop-filter: blur(24px);
+        -webkit-backdrop-filter: blur(24px); border: 1px solid rgba(48, 54, 61, 0.5);
       }
-      ::-webkit-scrollbar { width: 6px; height: 6px; }
-      ::-webkit-scrollbar-track { background: rgba(255, 255, 255, 0.05); }
-      ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.1); border-radius: 3px; }
-      ::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.2); }
-      .message-bubble { position: relative; transition: all 0.3s ease; }
-      .message-bubble:after { content: ''; position: absolute; bottom: 0; width: 0; height: 0; border: 10px solid transparent; }
-      .user-bubble:after { right: -10px; border-left-color: #22c55e; border-right: 0; }
-      .bot-bubble:after { left: -10px; border-right-color: #3a3a3a; border-left: 0; }
-      .glow-effect { box-shadow: 0 0 15px rgba(34, 197, 94, 0.3); }
-      .glow-effect:hover { box-shadow: 0 0 20px rgba(34, 197, 94, 0.5); }
-      @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-      .fade-in { animation: fadeIn 0.3s ease-out forwards; }
-      .gradient-text { background: linear-gradient(90deg, #22c55e, #3b82f6); -webkit-background-clip: text; background-clip: text; color: transparent; }
-      #sidebar { position: fixed; height: 100vh; left: 0; top: 0; width: 256px; transform: translateX(-100%); transition: transform 0.3s ease-in-out; z-index: 50; border-right: 1px solid #2a2a2a; display: flex; flex-direction: column; }
+      #sidebar { transform: translateX(-100%); transition: transform 0.4s cubic-bezier(0.22, 1, 0.36, 1); }
       #sidebar.active { transform: translateX(0); }
-      #overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.5); z-index: 40; display: none; }
-      #overlay.active { display: block; }
-      #chat-screen { flex: 1; display: flex; flex-direction: column; width: 100%; }
-      #chat-box { max-width: 4xl; margin-left: auto; margin-right: auto; padding: 1.5rem; padding-bottom: 6rem; width: 100%; }
-      .fixed-input-container { position: fixed; bottom: 0; left: 0; width: 100%; padding: 1rem 1.5rem; background-color: #0a0a0a; z-index: 40; }
-      #chat-form .max-w-4xl { max-width: 56rem; margin-left: auto; margin-right: auto; background-color: #1a1a1a; border-radius: 1.5rem; padding: 0.5rem; border: 1px solid #2a2a2a; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05); }
-      .message-bubble { max-width: 80%; word-wrap: break-word; }
-      @media (max-width: 768px) {
-        #chat-box { padding-left: 1rem; padding-right: 1rem; padding-bottom: 6rem; }
-        .fixed-input-container { padding: 1rem 1rem 2rem; }
-        #chat-form .max-w-4xl { max-width: 100% !important; border-radius: 1.5rem; }
-        .message-bubble { max-width: 90%; }
+      #overlay { background: rgba(0,0,0,0.5); opacity: 0; transition: opacity 0.3s ease-in-out; pointer-events: none; }
+      #overlay.active { opacity: 1; pointer-events: auto; }
+
+      @keyframes popIn { from { opacity: 0; transform: translateY(15px) scale(0.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
+      .pop-in { animation: popIn 0.5s cubic-bezier(0.22, 1, 0.36, 1) forwards; }
+      
+      .message-content pre { position: relative; }
+      .copy-code-btn {
+        position: absolute; top: 0.75rem; right: 0.75rem; background-color: #21262d; color: #8b949e;
+        padding: 0.25rem 0.5rem; border-radius: 0.375rem; font-size: 0.75rem; opacity: 0; transition: opacity 0.2s;
       }
-      /* Profile Modal animations */
-#profile-modal.flex {
-  opacity: 1 !important;
-  transform: scale(1) !important;
-}
-
-#profile-modal > div {
-  opacity: 0;
-  transform: scale(0.95);
-  transition: all 0.3s ease;
-}
-
-#profile-modal.flex > div {
-  opacity: 1;
-  transform: scale(1);
-}
-
-/* Toast message improvements (optional) */
-.fixed.top-4.right-4 {
-  pointer-events: auto;
-  user-select: none;
-  will-change: transform, opacity;
-}
-
+      .message-content pre:hover .copy-code-btn { opacity: 1; }
     </style>
-  </head>
-  <body class="bg-dark-900 text-gray-100 h-screen flex flex-col">
-    <div id="overlay"></div>
+</head>
+<body class="h-screen flex flex-col text-text-primary overflow-hidden">
+    <div class="aurora-background"></div>
+    <div id="overlay" class="fixed inset-0 z-40"></div>
+    <div id="error-display" class="hidden fixed inset-x-0 top-0 p-4 bg-red-800 text-white text-center z-[200]"></div>
 
-    <header class="flex justify-between items-center p-4 bg-dark-800 border-b border-dark-700">
-      <div class="flex items-center space-x-3">
-        <button id="mobile-menu-btn" class="text-gray-300 hover:text-white transition-colors">
-          <i class="fas fa-bars text-xl"></i>
-        </button>
-        <div class="text-xl font-bold gradient-text">Quainex AI</div>
-      </div>
-      <div class="flex items-center space-x-4">
-        <div class="relative">
-          <select id="provider-select" class="appearance-none bg-dark-700 text-gray-200 rounded-lg px-3 py-1.5 pr-8 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 border border-dark-600">
-            <option value="deepseek">BRILUX</option>
-            <option value="ensemble">IZZMHI</option>
-          </select>
-          <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-400">
-            <i class="fas fa-chevron-down text-xs"></i>
-          </div>
+    <!-- ===== HEADER ===== -->
+    <header class="flex-shrink-0 flex justify-between items-center p-3 border-b border-border-color z-30 bg-gray-base/70 backdrop-blur-sm">
+        <div class="flex items-center space-x-3">
+            <button id="mobile-menu-btn" class="p-2 rounded-md hover:bg-gray-ui transition-colors">
+                <i class="fas fa-bars text-lg text-text-secondary"></i>
+            </button>
+            <h1 class="text-lg font-bold text-text-primary">Quainex <span class="text-primary">AI</span></h1>
         </div>
-        <button id="logout-btn" class="bg-red-500 hover:bg-red-600 text-sm px-3 py-1 rounded-lg hidden transition-colors">Logout</button>
-        <img id="user-avatar" src="https://ui-avatars.com/api/?name=U&background=22c55e&color=fff" class="h-8 w-8 rounded-full border-2 border-primary-500 hover:border-primary-300 transition-colors cursor-pointer" />
-      </div>
+        <div class="flex items-center space-x-4">
+            <button id="new-chat-btn-header" class="p-2 rounded-md hover:bg-gray-ui transition-colors">
+                <i class="fas fa-plus text-lg text-text-secondary"></i>
+            </button>
+        </div>
     </header>
 
-    <main class="flex flex-1 relative">
-      <aside id="sidebar" class="fixed inset-y-0 left-0 z-50 flex-col w-64 bg-dark-800 border-r border-dark-700 p-4 space-y-6 overflow-y-auto transition-transform ease-in-out duration-300">
-        <div class="space-y-4">
-          <button class="w-full text-left p-2.5 rounded-lg hover:bg-dark-700 text-gray-300 hover:text-white transition-colors flex items-center space-x-3">
-            <i class="fas fa-plus-circle w-5 text-center"></i>
-            <span class="text-sm font-medium">New Chat</span>
-          </button>
-          <button class="w-full text-left p-2.5 rounded-lg hover:bg-dark-700 text-gray-300 hover:text-white transition-colors flex items-center space-x-3">
-            <i class="fas fa-search w-5 text-center"></i>
-            <span class="text-sm font-medium">Search</span>
-          </button>
-          <h3 class="text-xs font-semibold text-gray-400 uppercase tracking-wider px-2 mb-2">Recent</h3>
-          <div id="chat-history" class="space-y-1"></div>
-        </div>
-        <div class="mt-auto pt-4 border-t border-dark-700">
-          <button class="w-full text-left p-2.5 rounded-lg hover:bg-dark-700 text-gray-300 hover:text-white transition-colors flex items-center space-x-3">
-            <i class="fas fa-cog w-5 text-center"></i>
-            <span class="text-sm font-medium">Settings</span>
-          </button>
-          <div class="flex items-center space-x-3 p-2 rounded-lg hover:bg-dark-700 cursor-pointer transition-colors mt-2">
-            <img id="user-avatar-sidebar" src="https://ui-avatars.com/api/?name=U&background=22c55e&color=fff" class="h-8 w-8 rounded-full" />
-            <div class="text-sm font-medium text-white truncate">Guest User</div>
-          </div>
-        </div>
-      </aside>
+    <!-- ===== MAIN CONTENT ===== -->
+    <main class="flex flex-1 relative overflow-hidden">
+        <aside id="sidebar" class="fixed inset-y-0 left-0 flex flex-col w-72 p-4 space-y-4 z-50">
+            <div class="flex items-center justify-between">
+                <h2 class="text-xl font-bold">History</h2>
+                <button id="sidebar-close-btn" class="p-2 rounded-md hover:bg-gray-ui transition-colors md:hidden">
+                    <i class="fas fa-times text-text-secondary"></i>
+                </button>
+            </div>
+            <div id="chat-history" class="flex-1 space-y-2 overflow-y-auto pr-1"></div>
+            <div class="pt-4 border-t border-border-color space-y-2">
+                <button id="settings-btn" class="w-full text-left p-2.5 rounded-lg hover:bg-gray-ui text-text-secondary hover:text-text-primary transition-colors flex items-center space-x-3">
+                    <i class="fas fa-cog w-5 text-center"></i>
+                    <span class="text-sm font-medium">Settings</span>
+                </button>
+            </div>
+        </aside>
 
-      <section id="chat-screen" class="flex-1 flex flex-col w-full h-full">
-        <div class="flex-1 overflow-y-auto p-6 pb-24">
-            <div id="welcome-screen" class="flex h-full items-center justify-center">
-                <div class="max-w-xl text-center">
-                    <h1 class="text-5xl font-bold text-gray-200 mb-8">Hello, how can I help you?</h1>
+        <section id="chat-screen" class="flex-1 flex flex-col w-full h-full">
+            <div id="chat-box" class="flex-1 overflow-y-auto p-4 md:p-6">
+                <div id="welcome-screen" class="flex h-full items-center justify-center">
+                    <div class="max-w-3xl text-center flex flex-col items-center pop-in">
+                        <div class="w-24 h-24 rounded-full bg-gradient-to-br from-primary to-green-700 flex items-center justify-center shadow-glow mb-6">
+                            <i class="fas fa-bolt text-4xl text-gray-base"></i>
+                        </div>
+                        <h2 class="text-4xl md:text-5xl font-bold text-white mb-4">Welcome to Quainex AI</h2>
+                        <p class="text-text-secondary mb-8">The future of conversation is here. Ask me anything.</p>
+                        <div id="suggestion-chips" class="flex flex-wrap justify-center gap-3"></div>
+                    </div>
                 </div>
             </div>
-            <div id="chat-box" class="max-w-4xl mx-auto space-y-6 hidden"></div>
-        </div>
-
-<div id="profile-modal" class="fixed inset-0 bg-black bg-opacity-50 backdrop-blur-sm z-50 hidden flex items-center justify-center px-4">
-  <div class="bg-dark-800 rounded-xl border border-gray-700 max-w-md w-full p-6 relative shadow-lg transform scale-95 opacity-0 transition-all duration-300" role="dialog" aria-modal="true" aria-labelledby="profile-modal-title">
-    <button id="profile-close-btn" class="absolute top-3 right-3 text-gray-400 hover:text-white" aria-label="Close profile modal">
-      <i class="fas fa-times text-xl"></i>
-    </button>
-    <h2 id="profile-modal-title" class="text-2xl font-semibold mb-4 text-white">Your Profile</h2>
-
-    <div class="flex flex-col items-center space-y-4">
-      <img id="profile-avatar-preview" src="https://ui-avatars.com/api/?name=U&background=22c55e&color=fff" alt="User Avatar" class="w-24 h-24 rounded-full border-4 border-primary-500 object-cover" />
-      
-      <button id="change-avatar-btn" class="px-4 py-2 bg-primary-600 rounded-lg text-white hover:bg-primary-500 transition-colors">Change Avatar</button>
-      <input type="file" id="avatar-file-input" accept=".png,.jpg,.jpeg,.webp" class="hidden" />
-      
-      <label for="profile-name-input" class="self-start text-white font-medium">Display Name</label>
-      <input id="profile-name-input" type="text" maxlength="30" class="w-full rounded-md bg-dark-700 border border-gray-600 px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-primary-500" placeholder="Enter your display name" autocomplete="off" />
-
-      <button id="profile-save-btn" class="mt-4 w-full bg-primary-600 rounded-lg py-2 text-white font-semibold hover:bg-primary-500 transition-colors">Save Profile</button>
-    </div>
-  </div>
-</div>
-
-
-        <div class="fixed-input-container">
-          <form id="chat-form" class="max-w-4xl mx-auto flex flex-col items-center">
-            <div class="flex items-end w-full gap-2 p-2 bg-dark-800 rounded-2xl md:rounded-3xl border border-dark-700 shadow-xl">
-              <button type="button" id="gemini-plus-btn" class="flex-shrink-0 text-gray-400 hover:text-white transition-colors p-2 rounded-full">
-                <i class="fas fa-plus text-lg"></i>
-              </button>
-              <div class="relative flex-1">
-                <textarea id="chat-input" rows="1" placeholder="Message Quainex..." 
-                  class="w-full bg-transparent text-white px-1 py-1 pr-12 rounded-lg focus:outline-none resize-none overflow-hidden placeholder-gray-400"></textarea>
-                <div class="absolute right-3 top-1/2 -translate-y-1/2 flex items-center space-x-2">
-                  <button type="button" id="voice-btn" class="text-gray-400 hover:text-white transition-colors p-1">
-                    <i class="fas fa-microphone"></i>
-                  </button>
-                </div>
-              </div>
-              <button type="submit" class="flex-shrink-0 bg-primary-600 hover:bg-primary-500 text-white w-10 h-10 rounded-full transition-all flex items-center justify-center glow-effect">
-                <i class="fas fa-paper-plane"></i>
-              </button>
+            
+            <div class="flex-shrink-0 p-4 md:p-6 bg-gradient-to-t from-gray-base to-transparent">
+                <form id="chat-form" class="max-w-4xl mx-auto">
+                    <div id="chat-form-container" class="flex items-end w-full p-2 rounded-2xl shadow-lg focus-within:border-primary transition-colors">
+                        <textarea id="chat-input" rows="1" placeholder="Ask me anything..." class="w-full bg-transparent text-text-primary px-2 py-2.5 rounded-lg focus:outline-none resize-none placeholder-text-secondary"></textarea>
+                        <button type="submit" class="flex-shrink-0 bg-primary hover:bg-primary-hover text-gray-base w-10 h-10 rounded-xl transition-all flex items-center justify-center ml-2">
+                            <i class="fas fa-arrow-up text-lg"></i>
+                        </button>
+                    </div>
+                </form>
             </div>
-          </form>
-        </div>
-      </section>
+        </section>
     </main>
 
-    <script>
-      window.BACKEND_URL = "https://quainex.onrender.com";
-    </script>
-    <script src="app.js" defer></script>
+    <div id="modal-container"></div>
 
-<div id="settings-modal" class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden flex items-center justify-center">
-  </div>
-  </body>
+    <!-- ===== JAVASCRIPT LOGIC ===== -->
+    <script>
+        try {
+            document.addEventListener('DOMContentLoaded', () => {
+                const APP = {
+                    BACKEND_URL: "https://quainex.onrender.com",
+                    PREFS_KEY: "quainex_prefs_aurora_v1",
+                    HISTORY_KEY: "quainex_history_aurora_v1",
+                    currentChatId: null, chats: [], prefs: { provider: "deepseek" }, elements: {},
+                    suggestionChips: [ "Explain quantum computing", "Latest AI advancements?", "Python web scraper", "Plan a trip to Tokyo" ],
+
+                    init() {
+                        this.cacheDOMElements();
+                        this.loadState();
+                        this.registerEventListeners();
+                        this.renderChatHistory();
+                        this.renderSuggestionChips();
+                        this.showWelcomeScreen();
+                        console.log("Quainex AI Aurora Initialized.");
+                    },
+
+                    cacheDOMElements() {
+                        const ids = [ 'mobile-menu-btn', 'sidebar', 'overlay', 'chat-history', 'chat-screen', 'chat-box', 'welcome-screen', 'chat-form', 'chat-input', 'modal-container', 'sidebar-close-btn', 'settings-btn', 'new-chat-btn-header', 'suggestion-chips', 'error-display' ];
+                        ids.forEach(id => this.elements[id] = document.getElementById(id));
+                    },
+
+                    loadState() {
+                        try {
+                            const prefs = localStorage.getItem(this.PREFS_KEY);
+                            if (prefs) this.prefs = { ...this.prefs, ...JSON.parse(prefs) };
+                            const history = localStorage.getItem(this.HISTORY_KEY);
+                            if (history) this.chats = JSON.parse(history);
+                        } catch (e) { console.error("Failed to load state:", e); }
+                    },
+
+                    savePrefs() { localStorage.setItem(this.PREFS_KEY, JSON.stringify(this.prefs)); },
+                    saveHistory() { localStorage.setItem(this.HISTORY_KEY, JSON.stringify(this.chats)); },
+
+                    registerEventListeners() {
+                        const safeListen = (id, event, handler) => {
+                            if (this.elements[id]) this.elements[id].addEventListener(event, handler);
+                        };
+                        safeListen('mobile-menu-btn', 'click', () => this.toggleSidebar());
+                        safeListen('sidebar-close-btn', 'click', () => this.toggleSidebar(true));
+                        safeListen('overlay', 'click', () => this.toggleSidebar(true));
+                        safeListen('chat-form', 'submit', this.handleFormSubmit.bind(this));
+                        safeListen('chat-input', 'keydown', this.handleKeyPress.bind(this));
+                        safeListen('chat-input', 'input', e => this.autoResizeInput(e.target));
+                        safeListen('settings-btn', 'click', this.renderSettingsModal.bind(this));
+                        safeListen('new-chat-btn-header', 'click', this.startNewChat.bind(this));
+                    },
+
+                    toggleSidebar(forceClose = false) {
+                        const { sidebar, overlay } = this.elements;
+                        if (!sidebar || !overlay) return;
+                        const isActive = sidebar.classList.contains('active');
+                        if (forceClose || isActive) {
+                            sidebar.classList.remove('active');
+                            overlay.classList.remove('active');
+                        } else {
+                            sidebar.classList.add('active');
+                            overlay.classList.add('active');
+                        }
+                    },
+
+                    renderChatHistory() {
+                        const container = this.elements['chat-history'];
+                        if (!container) return;
+                        container.innerHTML = this.chats.length === 0 ? `<p class="text-sm text-text-secondary text-center px-4 py-8">No chat history.</p>` : '';
+                        this.chats.forEach(chat => {
+                            const item = document.createElement('div');
+                            item.className = `group relative p-2.5 rounded-lg cursor-pointer hover:bg-gray-ui transition-colors ${chat.id === this.currentChatId ? 'bg-gray-ui' : ''}`;
+                            item.innerHTML = `<p class="text-sm font-medium text-text-primary truncate pr-8">${this.escapeHtml(chat.title)}</p>
+                                            <button class="delete-chat-btn absolute right-2 top-1/2 -translate-y-1/2 w-7 h-7 rounded-md text-text-secondary hover:bg-gray-base hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                <i class="fas fa-trash-alt"></i></button>`;
+                            item.addEventListener('click', e => !e.target.closest('.delete-chat-btn') && this.loadChat(chat.id));
+                            item.querySelector('.delete-chat-btn').addEventListener('click', e => { e.stopPropagation(); this.deleteChat(chat.id); });
+                            container.appendChild(item);
+                        });
+                    },
+
+                    renderSuggestionChips() {
+                        const container = this.elements['suggestion-chips'];
+                        if (!container) return;
+                        container.innerHTML = '';
+                        this.suggestionChips.forEach(prompt => {
+                            const chip = document.createElement('button');
+                            chip.className = 'px-4 py-2 bg-gray-ui border border-border-color rounded-full text-sm text-text-primary hover:bg-gray-light hover:border-primary transition-all';
+                            chip.textContent = prompt;
+                            chip.addEventListener('click', () => { this.elements['chat-input'].value = prompt; this.handleFormSubmit(new Event('submit')); });
+                            container.appendChild(chip);
+                        });
+                    },
+                    
+                    // ========== CORRECTED LOGIC HERE ==========
+                    showWelcomeScreen() {
+                        if (this.elements['chat-box']) this.elements['chat-box'].style.display = 'block'; // Ensure parent is visible
+                        if (this.elements['welcome-screen']) this.elements['welcome-screen'].style.display = 'flex'; // Show welcome
+                    },
+
+                    showChatScreen() {
+                        if (this.elements['chat-box']) this.elements['chat-box'].style.display = 'block'; // Ensure parent is visible
+                        if (this.elements['welcome-screen']) this.elements['welcome-screen'].style.display = 'none'; // Hide welcome
+                    },
+
+                    autoResizeInput(el) { if(el) { el.style.height = 'auto'; el.style.height = `${el.scrollHeight}px`; } },
+
+                    startNewChat() {
+                        this.currentChatId = null;
+                        if (this.elements['chat-box']) this.elements['chat-box'].innerHTML = ''; // Clear messages
+                        this.showWelcomeScreen(); // Show the welcome screen again
+                        this.renderChatHistory(); 
+                        this.toggleSidebar(true);
+                    },
+
+                    loadChat(chatId) {
+                        const chat = this.chats.find(c => c.id === chatId);
+                        if (!chat || !this.elements['chat-box']) return;
+                        this.currentChatId = chatId;
+                        this.elements['chat-box'].innerHTML = '';
+                        chat.messages.forEach(msg => this.appendMessage(msg.role, msg.content));
+                        this.showChatScreen(); this.renderChatHistory(); this.toggleSidebar(true);
+                    },
+
+                    deleteChat(chatId) {
+                        if (!confirm("Are you sure you want to delete this chat?")) return;
+                        this.chats = this.chats.filter(c => c.id !== chatId);
+                        this.saveHistory();
+                        if (this.currentChatId === chatId) this.startNewChat();
+                        else this.renderChatHistory();
+                    },
+
+                    async handleFormSubmit(e) {
+                        e.preventDefault();
+                        const input = this.elements['chat-input'];
+                        const message = input.value.trim();
+                        if (!message) return;
+                        this.showChatScreen();
+                        let chat = this.chats.find(c => c.id === this.currentChatId);
+                        if (!chat) {
+                            this.currentChatId = `chat_${Date.now()}`;
+                            chat = { id: this.currentChatId, title: message.substring(0, 40) + (message.length > 40 ? '...' : ''), messages: [] };
+                            this.chats.unshift(chat);
+                        }
+                        chat.messages.push({ role: 'user', content: message });
+                        this.appendMessage('user', message);
+                        this.saveHistory(); this.renderChatHistory();
+                        input.value = ''; this.autoResizeInput(input);
+                        const loadingBubble = this.appendMessage('assistant', '...', true);
+                        try {
+                            const response = await fetch(`${this.BACKEND_URL}/api/chat`, {
+                                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ message, provider: this.prefs.provider, personality: 'agent' })
+                            });
+                            if (!response.ok) throw new Error(`API Error: ${response.statusText}`);
+                            const data = await response.json();
+                            chat.messages.push({ role: 'assistant', content: data.response });
+                            this.updateMessage(loadingBubble, data.response);
+                            this.saveHistory();
+                        } catch (error) {
+                            console.error("API call failed:", error);
+                            const errorMessage = `Sorry, I encountered an error: ${error.message}`;
+                            this.updateMessage(loadingBubble, errorMessage);
+                            chat.messages.push({ role: 'assistant', content: errorMessage });
+                            this.saveHistory();
+                        }
+                    },
+
+                    handleKeyPress(e) { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); this.elements['chat-form'].requestSubmit(); } },
+
+                    appendMessage(role, content, isLoading = false) {
+                        const chatBox = this.elements['chat-box'];
+                        if (!chatBox) return null;
+                        const wrapper = document.createElement('div');
+                        wrapper.className = 'message-bubble-wrapper pop-in mb-6';
+                        const bubble = document.createElement('div');
+                        bubble.className = `max-w-3xl w-fit rounded-2xl px-5 py-3 shadow-lg ${role === 'user' ? 'bg-primary text-gray-base ml-auto rounded-br-none' : 'bg-gray-ui text-text-primary rounded-bl-none'}`;
+                        if (isLoading) {
+                            bubble.innerHTML = `<div class="flex items-center space-x-1.5"><span class="w-2 h-2 bg-text-secondary rounded-full animate-pulse" style="animation-delay: 0s;"></span><span class="w-2 h-2 bg-text-secondary rounded-full animate-pulse" style="animation-delay: 0.2s;"></span><span class="w-2 h-2 bg-text-secondary rounded-full animate-pulse" style="animation-delay: 0.4s;"></span></div>`;
+                        } else { this.updateMessageContent(bubble, content); }
+                        wrapper.appendChild(bubble);
+                        chatBox.appendChild(wrapper);
+                        chatBox.scrollTop = chatBox.scrollHeight;
+                        return bubble;
+                    },
+
+                    updateMessage(bubble, newContent) {
+                        if (!bubble) return;
+                        this.updateMessageContent(bubble, newContent);
+                        if (this.elements['chat-box']) this.elements['chat-box'].scrollTop = this.elements['chat-box'].scrollHeight;
+                    },
+
+                    updateMessageContent(element, content) {
+                        element.innerHTML = `<div class="message-content prose prose-invert max-w-none prose-p:my-2 prose-pre:my-2">${marked.parse(content)}</div>`;
+                        element.querySelectorAll('pre').forEach(pre => {
+                            const code = pre.querySelector('code'); if (!code) return;
+                            const copyBtn = document.createElement('button');
+                            copyBtn.className = 'copy-code-btn'; copyBtn.innerHTML = '<i class="fas fa-copy"></i> Copy';
+                            copyBtn.addEventListener('click', () => {
+                                navigator.clipboard.writeText(code.innerText);
+                                copyBtn.innerHTML = '<i class="fas fa-check"></i> Copied!';
+                                setTimeout(() => { copyBtn.innerHTML = '<i class="fas fa-copy"></i> Copy'; }, 2000);
+                            });
+                            pre.appendChild(copyBtn);
+                        });
+                        element.querySelectorAll('pre code').forEach(block => hljs.highlightElement(block));
+                    },
+
+                    renderSettingsModal() {
+                        const content = `<h2 class="text-xl font-bold mb-4">Settings</h2>
+                                        <div><label class="block text-sm mb-1 text-text-secondary">AI Provider</label>
+                                        <select id="settings-provider" class="w-full rounded px-3 py-2 bg-gray-ui border border-border-color">
+                                            <option value="deepseek">BRILUX (Recommended)</option><option value="openrouter">OpenRouter</option><option value="groq">Groq</option>
+                                        </select></div>
+                                        <div class="flex justify-end mt-6"><button id="settings-save-btn" class="px-4 py-2 rounded bg-primary text-gray-base font-semibold">Save</button></div>`;
+                        this.createModal(content);
+                        const providerSelect = document.getElementById('settings-provider');
+                        providerSelect.value = this.prefs.provider;
+                        document.getElementById('settings-save-btn').addEventListener('click', () => {
+                            this.prefs.provider = providerSelect.value; this.savePrefs(); this.closeModal();
+                        });
+                    },
+
+                    createModal(contentHTML) {
+                        const modalContainer = this.elements['modal-container']; if (!modalContainer) return;
+                        modalContainer.innerHTML = `<div id="modal-backdrop" class="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-4 fade-in">
+                                                    <div class="modal-content w-full max-w-md p-6 rounded-xl pop-in">
+                                                        <button id="modal-close-btn" class="absolute top-4 right-4 text-text-secondary hover:text-text-primary">&times;</button>
+                                                        ${contentHTML}</div></div>`;
+                        document.getElementById('modal-close-btn').addEventListener('click', () => this.closeModal());
+                        document.getElementById('modal-backdrop').addEventListener('click', e => { if (e.target.id === 'modal-backdrop') this.closeModal(); });
+                    },
+
+                    closeModal() { if (this.elements['modal-container']) this.elements['modal-container'].innerHTML = ''; },
+                    escapeHtml(str) { return str.replace(/[&<>"']/g, m => ({'&': '&amp;','<': '&lt;','>': '&gt;','"': '&quot;',"'": '&#039;'})[m]); }
+                };
+                APP.init();
+            });
+        } catch (e) {
+            console.error("A critical error occurred:", e);
+            const errorDisplay = document.getElementById('error-display');
+            if(errorDisplay) {
+                errorDisplay.textContent = "Error: The application failed to start. Please try refreshing the page. Check the console for details.";
+                errorDisplay.classList.remove('hidden');
+            }
+        }
+    </script>
+</body>
 </html>
