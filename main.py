@@ -77,9 +77,9 @@ supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
+         "https://quainex.space",
         "https://quainexai.onrender.com",
-        "https://quainex.onrender.com",
-        "http://localhost:3000"  # For local development
+        "https://quainex.onrender.com"
     ],
     allow_credentials=True,
     allow_methods=["*"],
