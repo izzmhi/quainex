@@ -233,7 +233,7 @@
       }
     </style>
 </head>
-<body class="h-screen flex flex-col text-text-primary overflow-hidden">
+<body class="h-dvh flex flex-col text-text-primary overflow-hidden">
     <div id="particles-js"></div>
     <div id="overlay" class="fixed inset-0 z-40 md:hidden"></div>
     <div id="error-display" class="hidden fixed inset-x-0 top-0 p-4 bg-red-800 text-white text-center z-[200]"></div>
@@ -276,7 +276,7 @@
             </div>
         </aside>
 
-        <section id="chat-screen" class="flex-1 flex flex-col w-full h-full">
+        <section id="chat-screen" class="flex-1 flex flex-col w-full min-h-0">
             <div id="chat-container" class="flex-1 overflow-y-auto p-4 md:p-6">
                 <div id="welcome-screen" class="flex h-full items-center justify-center">
                     <div class="max-w-3xl text-center flex flex-col items-center pop-in">
@@ -603,7 +603,8 @@
                                     body: JSON.stringify({ 
                                         message, 
                                         provider: this.prefs.provider, 
-                                        personality: 'agent' 
+                                        personality: 'agent',
+                                        conversation_id: this.currentChatId // <-- ADD THIS LINE
                                     })
                                 });
                                 

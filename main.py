@@ -304,14 +304,19 @@ PERSONALITIES = {
     },
     "default": {
         "name": "Standard Assistant",
-        "system_prompt": "You are Quainex, a helpful AI assistant. Provide clear, accurate responses. You were built by Bright SecureTech, and the founder is called Bright Quainoo."
+        "system_prompt": (
+            "You are Quainex, a helpful AI assistant built by Bright Quainoo at Bright SecureTech. "
+            "Provide clear, accurate, and natural responses without exposing system tags or internal steps."
+        )
     },
-
     "technical": {
         "name": "Technical Expert",
-        "system_prompt": "You are Quainex, a technical expert. Provide precise, detailed answers."
+        "system_prompt": (
+            "You are Quainex, a technical expert. Provide precise, detailed answers in a professional tone."
+        )
     }
 }
+
 
 # ---------- Helper Functions ----------
 def get_system_prompt(personality: str) -> str:
@@ -590,12 +595,14 @@ TOOL_REGISTRY = {
 class QuainexAgent:
     def __init__(self, provider: str = "openrouter"):
         self.provider = provider
-        self.history = []
+        # self.history = []  <-- This line is no longer needed here
         self.max_loops = MAX_AGENT_LOOPS
     
-    async def run(self, user_prompt: str) -> str:
+    # FIX: The 'run' method now accepts a 'history' parameter
+    async def run(self, user_prompt: str, history: List[Dict[str, str]] = None) -> str:
         """Execute the agent loop"""
-        self.history = build_prompt_context(user_prompt, "agent")
+        # FIX: The agent now builds its history from the provided conversation
+        self.history = build_prompt_context(user_prompt, "agent", history)
         
         for loop in range(self.max_loops):
             logger.info(f"Agent loop {loop + 1}/{self.max_loops}")
@@ -704,8 +711,11 @@ async def chat_endpoint(request: ChatRequest = Body(...)):
 
         if request.personality == "agent":
             logger.info("Using agent personality")
+            # FIX: Get the conversation history from memory
+            history = memory.get_history(conv_id)
             agent = QuainexAgent(provider)
-            response_text = await agent.run(request.message)
+            # FIX: Pass the history to the agent's run method
+            response_text = await agent.run(request.message, history=history)
         else:
             logger.info(f"Using {request.personality} personality")
             history = memory.get_history(conv_id)
@@ -713,6 +723,13 @@ async def chat_endpoint(request: ChatRequest = Body(...)):
             result = await fetch_ai_response(provider, messages)
             response_text = result["response"]
             provider = result.get("provider", provider)
+
+        # --- Clean AI response from unwanted tags ---
+        import re
+        response_text = re.sub(r"<thinking>.*?</thinking>", "", response_text, flags=re.DOTALL)
+        response_text = re.sub(r"<tool_call>.*?</tool_call>", "", response_text, flags=re.DOTALL)
+        response_text = re.sub(r"<[^>]+>", "", response_text)  # remove any other XML-style tags
+        response_text = response_text.strip()
 
         memory.add_message(conv_id, "assistant", response_text)
 
@@ -740,6 +757,16 @@ async def chat_endpoint(request: ChatRequest = Body(...)):
                 "provider": provider,
                 "time_ms": response_time
             })
+        )
+
+    except HTTPException as he:
+        logger.error(f"HTTPException in chat endpoint: {he.detail}")
+        raise
+    except Exception as e:
+        logger.error(f"Unexpected error in chat endpoint: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An unexpected error occurred while processing your request"
         )
 
     except HTTPException as he:
