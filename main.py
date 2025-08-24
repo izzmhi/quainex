@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Request, HTTPException, status, Response, UploadFile, File, Body
+from fastapi import FastAPI, Request, HTTPException, status, Response, UploadFile, File, Body, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
@@ -20,7 +20,7 @@ from fastapi.encoders import jsonable_encoder
 from quainexmemory import MemoryManager
 import requests
 import io
-import uvicorn # <-- Missing import added
+import uvicorn
 
 # Initialize MemoryManager
 memory = MemoryManager(limit=10)
@@ -50,7 +50,7 @@ API_KEYS = {
     "deepseek": os.getenv("DEEPSEEK_API_KEY"),
     "supabaseurl": os.getenv("SUPABASE_URL"),
     "supabasekey": os.getenv("SUPABASE_KEY"),
-    "newsapi": os.getenv("NEWS_API_KEY") # <-- API Key loaded from .env
+    "newsapi": os.getenv("NEWS_API_KEY")
 }
 
 NEWS_API_URL = "https://newsapi.org/v2/top-headlines"
@@ -77,10 +77,10 @@ supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 app.add_middleware(
     CORSMiddleware,
      allow_origins=[
-        "https://quainex.space", # <-- YOUR NEW DOMAIN
+        "https://quainex.space",
         "https://quainexai.onrender.com",
         "https://quainex.onrender.com",
-        "http://localhost:3000" # For local development
+        "http://localhost:3000"
     ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -273,28 +273,22 @@ TOOLS_SCHEMA = """
 </tools>
 """
 
+# --- UPDATED: REASONING_PROMPT with identity and clean response instructions ---
 REASONING_PROMPT = f"""
-You are Quainex, an advanced AI assistant. Follow this process:
+You are Quainex, an advanced AI assistant. You were built by Bright SecureTech, and its founder is Bright Quainoo.
+Your primary goal is to provide clear, accurate, and helpful responses.
 
-1. THINK: Analyze the request using <thinking> tags
-2. ACT: Use <tool_call> tags if you need to use a tool
-3. ANSWER: Provide the final answer without XML tags
+Follow this process to answer the user's request:
+1.  **THINK**: Analyze the user's request and your capabilities. Decide if you need to use a tool. Use <thinking> tags to document your thought process. This is for your internal use only.
+2.  **ACT**: If you need a tool, use the <tool_call> tag to call it.
+3.  **ANSWER**: Provide the final, clean answer to the user.
+
+**IMPORTANT**: The final answer you provide to the user must be a direct, conversational response. It must not contain any XML tags like <thinking> or <tool_call>.
 
 Available Tools:
 {TOOLS_SCHEMA}
 
-Example Tool Call:
-<tool_call>
-    <tool_name>web_search</tool_name>
-    <parameters>
-        <query>Current weather in New York</query>
-    </parameters>
-</tool_call>
-
-Example Final Answer:
-The current weather in New York is 72°F and sunny.
-
-Now begin!
+Now, begin!
 """
 
 PERSONALITIES = {
@@ -421,8 +415,8 @@ async def query_provider(provider: str, messages: list, timeout: int = 30) -> di
             "provider": provider
         }
 
-DEFAULT_PROVIDER = "openrouter"  # Backend provider for Brilux
-DEFAULT_MODEL_NAME = "brilux"    # Friendly AI model name
+DEFAULT_PROVIDER = "openrouter"
+DEFAULT_MODEL_NAME = "brilux"
 
 async def fetch_ai_response(provider: str, messages: list, timeout: int = 60) -> dict:
     """Get AI response with fallback logic"""
@@ -588,20 +582,17 @@ TOOL_REGISTRY = {
     "python_interpreter": execute_python_code,
     "latest_news": get_latest_world_news,
     "generate_image": execute_image_generation,
-    "world_time": execute_world_time # <-- Implemented tool added to registry
+    "world_time": execute_world_time
 }
 
 # ---------- Agent Implementation ----------
 class QuainexAgent:
     def __init__(self, provider: str = "openrouter"):
         self.provider = provider
-        # self.history = []  <-- This line is no longer needed here
         self.max_loops = MAX_AGENT_LOOPS
     
-    # FIX: The 'run' method now accepts a 'history' parameter
     async def run(self, user_prompt: str, history: List[Dict[str, str]] = None) -> str:
         """Execute the agent loop"""
-        # FIX: The agent now builds its history from the provided conversation
         self.history = build_prompt_context(user_prompt, "agent", history)
         
         for loop in range(self.max_loops):
@@ -673,9 +664,10 @@ class QuainexAgent:
                 logger.error(f"Failed to parse tool call: {str(e)}")
                 logger.error(f"Malformed content was: {tool_match.group(1)}")
 
+        # If a tool was not called, assume the whole response is the final answer.
+        # The cleaning of tags will happen in the main endpoint.
         if not result["tool_name"]:
-            clean_text = re.sub(r'<[^>]+>', '', response_text).strip()
-            result["final_answer"] = clean_text
+            result["final_answer"] = response_text
         
         return result
     
@@ -698,44 +690,66 @@ class QuainexAgent:
             return f"<error>{error_msg}</error>"
 
 # ---------- API Endpoints ----------
+# --- UPDATED: The entire /api/chat endpoint to handle file uploads ---
 @app.post("/api/chat")
-async def chat_endpoint(request: ChatRequest = Body(...)):
-    """Main chat endpoint with memory support"""
+async def chat_endpoint(
+    message: str = Form(...),
+    provider: str = Form("openrouter"),
+    personality: str = Form("default"),
+    conversation_id: Optional[str] = Form(None),
+    file: Optional[UploadFile] = File(None)
+):
+    """Main chat endpoint with memory and file upload support"""
     try:
         start_time = datetime.now()
-        logger.info(f"Received chat request: {request.model_dump_json()}")
+        logger.info(f"Received chat request. Personality: {personality}, ConvID: {conversation_id}, File: {file.filename if file else 'No'}")
 
-        conv_id = request.conversation_id or "default"
-        memory.add_message(conv_id, "user", request.message)
-        provider = request.provider
+        conv_id = conversation_id or "default"
+        
+        # Process file and combine with message
+        full_message = message
+        if file:
+            try:
+                # Read file content and decode as text
+                file_content = await file.read()
+                file_text = file_content.decode('utf-8')
+                
+                # Append file context to the user's message
+                full_message = (
+                    f"{message}\n\n"
+                    f"--- CONTEXT FROM FILE: {file.filename} ---\n"
+                    f"{file_text}\n"
+                    f"--- END OF FILE CONTEXT ---"
+                )
+                logger.info(f"Appended content from file: {file.filename}")
+            except Exception as e:
+                logger.error(f"Could not read or decode file {file.filename}: {e}")
+                full_message = f"{message}\n\n[System note: A file named '{file.filename}' was uploaded but could not be read.]"
 
-        if request.personality == "agent":
+        memory.add_message(conv_id, "user", full_message)
+
+        if personality == "agent":
             logger.info("Using agent personality")
-            # FIX: Get the conversation history from memory
             history = memory.get_history(conv_id)
             agent = QuainexAgent(provider)
-            # FIX: Pass the history to the agent's run method
-            response_text = await agent.run(request.message, history=history)
+            response_text = await agent.run(full_message, history=history)
         else:
-            logger.info(f"Using {request.personality} personality")
+            logger.info(f"Using {personality} personality")
             history = memory.get_history(conv_id)
-            messages = build_prompt_context(request.message, request.personality, history)
+            messages = build_prompt_context(full_message, personality, history)
             result = await fetch_ai_response(provider, messages)
             response_text = result["response"]
             provider = result.get("provider", provider)
 
-        # --- Clean AI response from unwanted tags ---
-        import re
-        response_text = re.sub(r"<thinking>.*?</thinking>", "", response_text, flags=re.DOTALL)
-        response_text = re.sub(r"<tool_call>.*?</tool_call>", "", response_text, flags=re.DOTALL)
-        response_text = re.sub(r"<[^>]+>", "", response_text)  # remove any other XML-style tags
-        response_text = response_text.strip()
-
+        # Final cleaning of the AI response to remove any leftover tags
+        response_text = re.sub(r'<thinking>.*?</thinking>', '', response_text, flags=re.DOTALL).strip()
+        response_text = re.sub(r'<tool_call>.*?</tool_call>', '', response_text, flags=re.DOTALL).strip()
+        
         memory.add_message(conv_id, "assistant", response_text)
 
         try:
             db_response = supabase.table("chat_history").insert([
-                { "user_id": "api_user", "role": "user", "message": request.message, "provider": provider },
+                { "user_id": "api_user", "role": "user", "message": full_message, "provider": provider },
                 { "user_id": "api_user", "role": "assistant", "message": response_text, "provider": provider }
             ]).execute()
             if db_response.data:
@@ -769,16 +783,6 @@ async def chat_endpoint(request: ChatRequest = Body(...)):
             detail="An unexpected error occurred while processing your request"
         )
 
-    except HTTPException as he:
-        logger.error(f"HTTPException in chat endpoint: {he.detail}")
-        raise
-    except Exception as e:
-        logger.error(f"Unexpected error in chat endpoint: {str(e)}", exc_info=True)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="An unexpected error occurred while processing your request"
-        )
-
 @app.post("/voice")
 async def voice_endpoint(file: UploadFile = File(...)):
     """Transcribes audio using Groq and gets a chat response."""
@@ -787,8 +791,13 @@ async def voice_endpoint(file: UploadFile = File(...)):
 
     logger.info("Received voice transcription request")
     try:
+        # Create a dictionary for the files part of the multipart/form-data
         files = { "file": (file.filename, await file.read(), file.content_type) }
+        
+        # Create a dictionary for the data part
         payload = { "model": "whisper-large-v3" }
+        
+        # Set the authorization header
         headers = { "Authorization": f"Bearer {API_KEYS['groq']}" }
 
         async with httpx.AsyncClient(timeout=60) as client:
@@ -806,16 +815,30 @@ async def voice_endpoint(file: UploadFile = File(...)):
             raise HTTPException(status_code=500, detail="Transcription failed to return text.")
 
         logger.info(f"Transcript: {transcript}")
-
-        chat_req = ChatRequest(message=transcript, provider="groq")
-        chat_response = await chat_endpoint(chat_req)
         
-        response_content = json.loads(chat_response.body.decode())
-        response_content["transcript"] = transcript
+        # --- Create a mock request object for the chat endpoint ---
+        # The chat endpoint now expects Form data, not a Pydantic model.
+        # We simulate this by directly calling the agent logic.
+        
+        conv_id = "voice_default" # Use a default or generate a conversation ID
+        memory.add_message(conv_id, "user", transcript)
+        history = memory.get_history(conv_id)
+        agent = QuainexAgent(provider="groq")
+        chat_response_text = await agent.run(transcript, history=history)
+        
+        # Final cleaning
+        chat_response_text = re.sub(r'<thinking>.*?</thinking>', '', chat_response_text, flags=re.DOTALL).strip()
+        chat_response_text = re.sub(r'<tool_call>.*?</tool_call>', '', chat_response_text, flags=re.DOTALL).strip()
+        memory.add_message(conv_id, "assistant", chat_response_text)
 
         return JSONResponse(
             status_code=status.HTTP_200_OK,
-            content=response_content
+            content={
+                "success": True,
+                "transcript": transcript,
+                "response": chat_response_text,
+                "provider": "groq"
+            }
         )
 
     except Exception as e:

@@ -5,20 +5,17 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Quainex AI</title>
     
-    <!-- ICONS & FONTS -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
 
-    <!-- LIBRARIES -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/particles.js@2.0.0/particles.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
 
-    <!-- TAILWIND CONFIG -->
     <script>
       tailwind.config = {
         darkMode: 'class',
@@ -65,7 +62,6 @@
       }
     </script>
 
-    <!-- CUSTOM STYLES -->
     <style>
       body { 
         background-color: #0d1117; 
@@ -139,7 +135,7 @@
         font-size: 0.875rem;
         font-weight: 500;
         z-index: 100;
-        display: none; /* Add this line to hide the element */
+        display: none; /* Changed to flex from none */
         align-items: center;
         gap: 0.5rem;
         backdrop-filter: blur(10px);
@@ -243,7 +239,6 @@
       <span>Connecting...</span>
     </div>
 
-    <!-- ===== HEADER ===== -->
     <header class="flex-shrink-0 flex justify-between items-center p-3 border-b border-border-color z-30 bg-gray-base/80 backdrop-blur-sm">
         <div class="flex items-center space-x-3">
             <button id="mobile-menu-btn" class="p-2 rounded-md hover:bg-gray-ui transition-colors md:hidden">
@@ -258,7 +253,6 @@
         </div>
     </header>
 
-    <!-- ===== MAIN CONTENT ===== -->
     <main class="flex flex-1 relative overflow-hidden">
         <aside id="sidebar" class="absolute md:relative flex flex-col w-72 p-4 space-y-4 z-50 md:z-20">
             <div class="flex items-center justify-between">
@@ -292,8 +286,17 @@
             
             <div class="flex-shrink-0 p-4 md:p-6 bg-gradient-to-t from-gray-base to-transparent">
                 <form id="chat-form" class="max-w-4xl mx-auto">
+                    <div id="file-attachment-preview" class="hidden mb-2 px-3 py-2 bg-gray-ui/50 rounded-lg text-sm flex items-center justify-between"></div>
+
                     <div id="chat-form-container" class="flex items-end w-full p-2 rounded-2xl shadow-lg focus-within:border-primary transition-colors">
+                        <input type="file" id="file-input" class="hidden" />
+
                         <textarea id="chat-input" rows="1" placeholder="Ask me anything..." class="w-full bg-transparent text-text-primary px-2 py-2.5 rounded-lg focus:outline-none resize-none placeholder-text-secondary"></textarea>
+                        
+                        <button type="button" id="file-upload-btn" class="flex-shrink-0 text-text-secondary hover:text-primary w-10 h-10 rounded-xl transition-all flex items-center justify-center ml-2">
+                            <i class="fas fa-paperclip text-lg"></i>
+                        </button>
+                        
                         <button type="button" id="voice-btn" class="flex-shrink-0 text-text-secondary hover:text-primary w-10 h-10 rounded-xl transition-all flex items-center justify-center ml-2">
                             <i class="fas fa-microphone text-lg"></i>
                         </button>
@@ -308,7 +311,6 @@
 
     <div id="modal-container"></div>
 
-    <!-- ===== JAVASCRIPT LOGIC ===== -->
     <script>
         // Enhanced Quainex AI with better error handling and UI
         try {
@@ -329,6 +331,7 @@
                     isRecording: false,
                     currentBackend: null,
                     isOnline: false,
+                    currentFile: null, // ADDED: State for file upload
 
                     init() {
                         this.cacheDOMElements();
@@ -347,7 +350,9 @@
                             'chat-screen', 'chat-box', 'welcome-screen', 'chat-form', 
                             'chat-input', 'modal-container', 'settings-btn', 
                             'new-chat-btn-header', 'error-display', 'sidebar-close-btn', 
-                            'voice-btn', 'connection-status'
+                            'voice-btn', 'connection-status',
+                            // ADDED: New elements for file upload
+                            'file-upload-btn', 'file-input', 'file-attachment-preview'
                         ];
                         ids.forEach(id => this.elements[id] = document.getElementById(id));
                     },
@@ -477,6 +482,47 @@
                         safeListen('settings-btn', 'click', () => this.renderSettingsModal());
                         safeListen('new-chat-btn-header', 'click', () => this.startNewChat());
                         safeListen('voice-btn', 'click', () => this.handleVoiceInput());
+
+                        // ADDED: Event listeners for file upload
+                        safeListen('file-upload-btn', 'click', () => this.elements['file-input'].click());
+                        safeListen('file-input', 'change', (e) => this.handleFileSelect(e));
+                    },
+
+                    // ADDED: New functions to manage file uploads
+                    handleFileSelect(event) {
+                        const file = event.target.files[0];
+                        if (file) {
+                            if (file.size > 10 * 1024 * 1024) { // 10MB limit
+                                this.showToast("File size cannot exceed 10MB.", "error");
+                                event.target.value = '';
+                                return;
+                            }
+                            this.currentFile = file;
+                            this.renderFilePreview();
+                        }
+                    },
+
+                    renderFilePreview() {
+                        const preview = this.elements['file-attachment-preview'];
+                        if (!preview) return;
+
+                        if (this.currentFile) {
+                            preview.innerHTML = `
+                                <span class="truncate"><i class="fas fa-file-alt mr-2 text-text-secondary"></i>${this.escapeHtml(this.currentFile.name)}</span>
+                                <button id="remove-file-btn" class="ml-2 text-text-secondary hover:text-red-500 font-bold text-lg">&times;</button>
+                            `;
+                            preview.classList.remove('hidden');
+                            document.getElementById('remove-file-btn').addEventListener('click', () => this.clearFileAttachment());
+                        } else {
+                            preview.classList.add('hidden');
+                            preview.innerHTML = '';
+                        }
+                    },
+
+                    clearFileAttachment() {
+                        this.currentFile = null;
+                        this.elements['file-input'].value = '';
+                        this.renderFilePreview();
                     },
 
                     toggleSidebar(forceClose = false) {
@@ -541,6 +587,7 @@
                     startNewChat() {
                         this.currentChatId = null;
                         if (this.elements['chat-box']) this.elements['chat-box'].innerHTML = '';
+                        this.clearFileAttachment(); // MODIFIED
                         this.showWelcomeScreen();
                         this.renderChatHistory(); 
                     },
@@ -550,6 +597,7 @@
                         if (!chat || !this.elements['chat-box']) return;
                         this.currentChatId = chatId;
                         this.elements['chat-box'].innerHTML = '';
+                        this.clearFileAttachment(); // MODIFIED
                         chat.messages.forEach(msg => this.appendMessage(msg.role, msg.content));
                         this.showChatScreen(); 
                         this.renderChatHistory();
@@ -567,21 +615,32 @@
                         e.preventDefault();
                         const input = this.elements['chat-input'];
                         const message = input.value.trim();
-                        if (!message) return;
+                        // MODIFIED: Check for file as well
+                        if (!message && !this.currentFile) return;
                         
                         this.showChatScreen();
                         let chat = this.chats.find(c => c.id === this.currentChatId);
+
+                        // MODIFIED: Create a display message that includes the file name
+                        const displayMessage = this.currentFile 
+                            ? `${message}<br><small class="opacity-70">Attached: ${this.escapeHtml(this.currentFile.name)}</small>` 
+                            : message;
+
                         if (!chat) {
                             this.currentChatId = `chat_${Date.now()}`;
+                            // MODIFIED: Title generation includes file name if message is empty
+                            const title = message || `Chat with ${this.currentFile.name}`;
                             chat = { 
                                 id: this.currentChatId, 
-                                title: message.substring(0, 40) + (message.length > 40 ? '...' : ''), 
+                                title: title.substring(0, 40) + (title.length > 40 ? '...' : ''), 
                                 messages: [] 
                             };
                             this.chats.unshift(chat);
                         }
-                        chat.messages.push({ role: 'user', content: message });
-                        this.appendMessage('user', message);
+
+                        // MODIFIED: Push the displayMessage to history
+                        chat.messages.push({ role: 'user', content: displayMessage });
+                        this.appendMessage('user', displayMessage);
                         this.saveHistory(); 
                         this.renderChatHistory();
                         input.value = ''; 
@@ -589,39 +648,38 @@
                         
                         const loadingBubble = this.appendMessage('assistant', '...', true);
                         
+                        // MODIFIED: The entire try...catch block is updated to use FormData
                         try {
-                            // Check connection if we haven't already
                             if (this.currentBackend === null) {
                                 await this.checkConnection();
                             }
                             
-                            let response;
                             if (this.isOnline && this.currentBackend) {
-                                response = await fetch(`${this.currentBackend}/api/chat`, {
-                                    method: 'POST', 
-                                    headers: { 'Content-Type': 'application/json' },
-                                    body: JSON.stringify({ 
-                                        message, 
-                                        provider: this.prefs.provider, 
-                                        personality: 'agent',
-                                        conversation_id: this.currentChatId // <-- ADD THIS LINE
-                                    })
+                                const formData = new FormData();
+                                formData.append('message', message); // Send original message
+                                formData.append('provider', this.prefs.provider);
+                                formData.append('personality', 'agent');
+                                if (this.currentChatId) {
+                                    formData.append('conversation_id', this.currentChatId);
+                                }
+                                if (this.currentFile) {
+                                    formData.append('file', this.currentFile);
+                                }
+
+                                const response = await fetch(`${this.currentBackend}/api/chat`, {
+                                    method: 'POST',
+                                    body: formData // Body is now FormData
                                 });
                                 
+                                this.clearFileAttachment(); // Clear the file after sending
+
                                 if (!response.ok) throw new Error(`API Error: ${response.statusText}`);
                                 const data = await response.json();
                                 chat.messages.push({ role: 'assistant', content: data.response });
                                 this.updateMessage(loadingBubble, data.response);
                             } else {
-                                // Offline mode - use a simple local response
-                                const offlineResponses = [
-                                    "I'm currently experiencing connection issues. Please check your internet connection and try again.",
-                                    "I can't connect to the AI service right now. Please try again in a moment.",
-                                    "Network connection unavailable. I'll be back online as soon as the connection is restored.",
-                                    "It seems there's a connection problem. While I work to restore full functionality, is there anything else I can help with?"
-                                ];
-                                
-                                const offlineResponse = offlineResponses[Math.floor(Math.random() * offlineResponses.length)];
+                                const offlineResponses = ["I'm currently experiencing connection issues. Please check your internet connection and try again."];
+                                const offlineResponse = offlineResponses[0];
                                 chat.messages.push({ role: 'assistant', content: offlineResponse });
                                 this.updateMessage(loadingBubble, offlineResponse);
                             }
@@ -633,8 +691,7 @@
                             this.updateMessage(loadingBubble, errorMessage);
                             chat.messages.push({ role: 'assistant', content: errorMessage });
                             this.saveHistory();
-                            
-                            // Try to reconnect
+                            this.clearFileAttachment(); // Also clear file on error
                             setTimeout(() => this.checkConnection(), 3000);
                         }
                     },
