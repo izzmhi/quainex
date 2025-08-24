@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Quainex AI</title>
+    <title>Quainex AI | Advanced AI Assistant</title>
     
     <!-- ICONS & FONTS -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
@@ -29,8 +29,37 @@
               'primary': '#00dd93', 'primary-hover': '#00c482', 'gray-base': '#0d1117',
               'gray-bg': '#101419', 'gray-ui': '#21262d', 'border-color': 'rgba(48, 54, 61, 0.8)',
               'text-primary': '#c9d1d9', 'text-secondary': '#8b949e',
+              'accent-blue': '#58a6ff', 'accent-purple': '#bc8cff', 'accent-red': '#ff7b72'
             },
-            boxShadow: { 'glow': '0 0 25px rgba(0, 221, 147, 0.15)' }
+            boxShadow: { 
+              'glow': '0 0 25px rgba(0, 221, 147, 0.15)',
+              'glow-blue': '0 0 25px rgba(88, 166, 255, 0.15)',
+              'glow-purple': '0 0 25px rgba(188, 140, 255, 0.15)'
+            },
+            animation: {
+              'pulse-soft': 'pulse-soft 2s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+              'float': 'float 6s ease-in-out infinite',
+              'fade-in': 'fadeIn 0.5s ease-out forwards',
+              'slide-in': 'slideIn 0.3s ease-out forwards'
+            },
+            keyframes: {
+              'pulse-soft': {
+                '0%, 100%': { opacity: 1 },
+                '50%': { opacity: 0.7 }
+              },
+              'float': {
+                '0%, 100%': { transform: 'translateY(0px)' },
+                '50%': { transform: 'translateY(-10px)' }
+              },
+              'fadeIn': {
+                'from': { opacity: 0 },
+                'to': { opacity: 1 }
+              },
+              'slideIn': {
+                'from': { transform: 'translateY(20px)', opacity: 0 },
+                'to': { transform: 'translateY(0)', opacity: 1 }
+              }
+            }
           }
         }
       }
@@ -38,15 +67,21 @@
 
     <!-- CUSTOM STYLES -->
     <style>
-      body { background-color: #0d1117; font-family: 'Inter', sans-serif; }
+      body { 
+        background-color: #0d1117; 
+        font-family: 'Inter', sans-serif; 
+      }
+      
       #particles-js {
         position: fixed; top: 0; left: 0; width: 100%; height: 100vh;
         z-index: -1; background-color: #0d1117;
       }
       
       #sidebar, .modal-content, #chat-form-container {
-        background: rgba(16, 20, 25, 0.7); backdrop-filter: blur(16px);
-        -webkit-backdrop-filter: blur(16px); border: 1px solid rgba(48, 54, 61, 0.5);
+        background: rgba(16, 20, 25, 0.7); 
+        backdrop-filter: blur(16px);
+        -webkit-backdrop-filter: blur(16px); 
+        border: 1px solid rgba(48, 54, 61, 0.5);
       }
       
       /* --- MOBILE RESPONSIVE SIDEBAR --- */
@@ -63,10 +98,21 @@
         }
       }
 
-      #overlay { background: rgba(0,0,0,0.5); opacity: 0; transition: opacity 0.3s ease-in-out; pointer-events: none; }
-      #overlay.active { opacity: 1; pointer-events: auto; }
+      #overlay { 
+        background: rgba(0,0,0,0.5); 
+        opacity: 0; 
+        transition: opacity 0.3s ease-in-out; 
+        pointer-events: none; 
+      }
+      #overlay.active { 
+        opacity: 1; 
+        pointer-events: auto; 
+      }
 
-      @keyframes popIn { from { opacity: 0; transform: translateY(15px) scale(0.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
+      @keyframes popIn { 
+        from { opacity: 0; transform: translateY(15px) scale(0.98); } 
+        to { opacity: 1; transform: translateY(0) scale(1); } 
+      }
       .pop-in { animation: popIn 0.5s cubic-bezier(0.22, 1, 0.36, 1) forwards; }
       
       .message-content pre { position: relative; }
@@ -83,12 +129,119 @@
       .tts-btn:hover {
           background-color: #30363d; color: #c9d1d9;
       }
+      
+      .connection-status {
+        position: fixed;
+        bottom: 1rem;
+        right: 1rem;
+        padding: 0.5rem 1rem;
+        border-radius: 2rem;
+        font-size: 0.875rem;
+        font-weight: 500;
+        z-index: 100;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        backdrop-filter: blur(10px);
+        transition: all 0.3s ease;
+      }
+      
+      .connection-status.connected {
+        background: rgba(0, 221, 147, 0.2);
+        color: #00dd93;
+        border: 1px solid rgba(0, 221, 147, 0.3);
+      }
+      
+      .connection-status.disconnected {
+        background: rgba(255, 123, 114, 0.2);
+        color: #ff7b72;
+        border: 1px solid rgba(255, 123, 114, 0.3);
+      }
+      
+      .connection-status.connecting {
+        background: rgba(88, 166, 255, 0.2);
+        color: #58a6ff;
+        border: 1px solid rgba(88, 166, 255, 0.3);
+        animation: pulse-soft 2s infinite;
+      }
+      
+      .typing-indicator {
+        display: inline-flex;
+        align-items: center;
+        height: 17px;
+      }
+      
+      .typing-indicator span {
+        height: 7px;
+        width: 7px;
+        float: left;
+        margin: 0 1px;
+        background-color: #8b949e;
+        display: block;
+        border-radius: 50%;
+        opacity: 0.4;
+      }
+      
+      .typing-indicator span:nth-of-type(1) {
+        animation: typing 1s infinite;
+      }
+      
+      .typing-indicator span:nth-of-type(2) {
+        animation: typing 1s 0.33s infinite;
+      }
+      
+      .typing-indicator span:nth-of-type(3) {
+        animation: typing 1s 0.66s infinite;
+      }
+      
+      @keyframes typing {
+        0%, 100% {
+            transform: translateY(0);
+            opacity: 0.4;
+        }
+        50% {
+            transform: translateY(-5px);
+            opacity: 1;
+        }
+      }
+      
+      .suggestion-chip {
+        transition: all 0.2s ease;
+        cursor: pointer;
+      }
+      
+      .suggestion-chip:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+      }
+      
+      .message-bubble-wrapper {
+        opacity: 0;
+        transform: translateY(10px);
+        animation: slideIn 0.3s ease-out forwards;
+      }
+      
+      @keyframes slideIn {
+        from {
+          opacity: 0;
+          transform: translateY(10px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
     </style>
 </head>
 <body class="h-screen flex flex-col text-text-primary overflow-hidden">
     <div id="particles-js"></div>
     <div id="overlay" class="fixed inset-0 z-40 md:hidden"></div>
     <div id="error-display" class="hidden fixed inset-x-0 top-0 p-4 bg-red-800 text-white text-center z-[200]"></div>
+    
+    <div id="connection-status" class="connection-status connecting">
+      <i class="fas fa-circle-notch fa-spin"></i>
+      <span>Connecting...</span>
+    </div>
 
     <!-- ===== HEADER ===== -->
     <header class="flex-shrink-0 flex justify-between items-center p-3 border-b border-border-color z-30 bg-gray-base/80 backdrop-blur-sm">
@@ -130,8 +283,8 @@
                         <div class="w-24 h-24 rounded-full bg-gradient-to-br from-primary to-green-700 flex items-center justify-center shadow-glow mb-6">
                             <i class="fas fa-brain text-4xl text-gray-base"></i>
                         </div>
-                        <h2 class="text-4xl md:text-5xl font-bold text-white mb-4">Welcome to Quainex AI</h2>
-                        <p class="text-text-secondary">How may I help you today?</p>
+                        <h2 class="text-4xl md:text-5xl font-bold text-white mb-4">This is Quainex AI</h2>
+                        <p class="text-text-secondary mb-8">How may I help you today?</p>
                     </div>
                 </div>
                 <div id="chat-box" class="hidden space-y-6"></div>
@@ -157,14 +310,25 @@
 
     <!-- ===== JAVASCRIPT LOGIC ===== -->
     <script>
+        // Enhanced Quainex AI with better error handling and UI
         try {
             document.addEventListener('DOMContentLoaded', () => {
                 const APP = {
                     BACKEND_URL: "https://quainex.space",
+                    BACKUP_URL: "https://quainexai.onrender.com",
                     PREFS_KEY: "quainex_prefs_nexus_v2",
                     HISTORY_KEY: "quainex_history_nexus_v2",
-                    currentChatId: null, chats: [], prefs: { provider: "deepseek" }, elements: {},
-                    mediaRecorder: null, audioChunks: [], isRecording: false,
+                    currentChatId: null, 
+                    chats: [], 
+                    prefs: { 
+                        provider: "deepseek"
+                    }, 
+                    elements: {},
+                    mediaRecorder: null, 
+                    audioChunks: [], 
+                    isRecording: false,
+                    currentBackend: null,
+                    isOnline: false,
 
                     init() {
                         this.cacheDOMElements();
@@ -173,34 +337,137 @@
                         this.registerEventListeners();
                         this.renderChatHistory();
                         this.showWelcomeScreen();
+                        this.checkConnection();
                         console.log("Quainex AI Nexus Initialized.");
                     },
 
                     cacheDOMElements() {
-                        const ids = [ 'mobile-menu-btn', 'sidebar', 'overlay', 'chat-history', 'chat-screen', 'chat-box', 'welcome-screen', 'chat-form', 'chat-input', 'modal-container', 'settings-btn', 'new-chat-btn-header', 'error-display', 'sidebar-close-btn', 'voice-btn' ];
+                        const ids = [ 
+                            'mobile-menu-btn', 'sidebar', 'overlay', 'chat-history', 
+                            'chat-screen', 'chat-box', 'welcome-screen', 'chat-form', 
+                            'chat-input', 'modal-container', 'settings-btn', 
+                            'new-chat-btn-header', 'error-display', 'sidebar-close-btn', 
+                            'voice-btn', 'connection-status'
+                        ];
                         ids.forEach(id => this.elements[id] = document.getElementById(id));
                     },
                     
                     initParticles() {
                         if (window.particlesJS) {
-                            particlesJS('particles-js', { "particles": { "number": { "value": 60, "density": { "enable": true, "value_area": 800 } }, "color": { "value": "#00dd93" }, "shape": { "type": "circle" }, "opacity": { "value": 0.3, "random": true }, "size": { "value": 3, "random": true }, "line_linked": { "enable": true, "distance": 150, "color": "#21262d", "opacity": 0.4, "width": 1 }, "move": { "enable": true, "speed": 1, "direction": "none", "out_mode": "out" } }, "interactivity": { "detect_on": "canvas", "events": { "onhover": { "enable": true, "mode": "grab" }, "onclick": { "enable": false } }, "modes": { "grab": { "distance": 140, "line_linked": { "opacity": 1 } } } }, "retina_detect": true });
+                            particlesJS('particles-js', { 
+                                "particles": { 
+                                    "number": { "value": 60, "density": { "enable": true, "value_area": 800 } }, 
+                                    "color": { "value": "#00dd93" }, 
+                                    "shape": { "type": "circle" }, 
+                                    "opacity": { "value": 0.3, "random": true }, 
+                                    "size": { "value": 3, "random": true }, 
+                                    "line_linked": { "enable": true, "distance": 150, "color": "#21262d", "opacity": 0.4, "width": 1 }, 
+                                    "move": { "enable": true, "speed": 1, "direction": "none", "out_mode": "out" } 
+                                }, 
+                                "interactivity": { 
+                                    "detect_on": "canvas", 
+                                    "events": { 
+                                        "onhover": { "enable": true, "mode": "grab" }, 
+                                        "onclick": { "enable": false } 
+                                    }, 
+                                    "modes": { 
+                                        "grab": { "distance": 140, "line_linked": { "opacity": 1 } } 
+                                    } 
+                                }, 
+                                "retina_detect": true 
+                            });
                         }
+                    },
+                    
+                    async checkConnection() {
+                        this.updateConnectionStatus('connecting', 'Checking connection...');
+                        
+                        // Try primary backend first
+                        try {
+                            const response = await fetch(`${this.BACKEND_URL}/health`, {
+                                method: 'GET',
+                                headers: { 'Content-Type': 'application/json' },
+                                signal: AbortSignal.timeout(5000)
+                            });
+                            
+                            if (response.ok) {
+                                this.currentBackend = this.BACKEND_URL;
+                                this.isOnline = true;
+                                this.updateConnectionStatus('connected', 'Connected to Quainex AI');
+                                return true;
+                            }
+                        } catch (e) {
+                            console.warn("Primary backend unavailable:", e);
+                        }
+                        
+                        // Try backup backend
+                        try {
+                            const response = await fetch(`${this.BACKUP_URL}/health`, {
+                                method: 'GET',
+                                headers: { 'Content-Type': 'application/json' },
+                                signal: AbortSignal.timeout(5000)
+                            });
+                            
+                            if (response.ok) {
+                                this.currentBackend = this.BACKUP_URL;
+                                this.isOnline = true;
+                                this.updateConnectionStatus('connected', 'Connected to backup server');
+                                return true;
+                            }
+                        } catch (e) {
+                            console.warn("Backup backend unavailable:", e);
+                        }
+                        
+                        // Both backends failed
+                        this.isOnline = false;
+                        this.updateConnectionStatus('disconnected', 'Offline mode - responses may be limited');
+                        return false;
+                    },
+                    
+                    updateConnectionStatus(status, message) {
+                        const connectionStatus = this.elements['connection-status'];
+                        if (!connectionStatus) return;
+                        
+                        connectionStatus.className = `connection-status ${status}`;
+                        connectionStatus.innerHTML = `
+                            <i class="fas ${status === 'connected' ? 'fa-check-circle' : status === 'disconnected' ? 'fa-exclamation-triangle' : 'fa-circle-notch fa-spin'}"></i>
+                            <span>${message}</span>
+                        `;
                     },
 
                     loadState() {
                         try {
                             const prefs = localStorage.getItem(this.PREFS_KEY);
                             if (prefs) this.prefs = { ...this.prefs, ...JSON.parse(prefs) };
+                            
                             const history = localStorage.getItem(this.HISTORY_KEY);
                             if (history) this.chats = JSON.parse(history);
-                        } catch (e) { console.error("Failed to load state:", e); }
+                        } catch (e) { 
+                            console.error("Failed to load state:", e); 
+                        }
                     },
 
-                    savePrefs() { localStorage.setItem(this.PREFS_KEY, JSON.stringify(this.prefs)); },
-                    saveHistory() { localStorage.setItem(this.HISTORY_KEY, JSON.stringify(this.chats)); },
+                    savePrefs() { 
+                        try {
+                            localStorage.setItem(this.PREFS_KEY, JSON.stringify(this.prefs)); 
+                        } catch (e) {
+                            console.error("Failed to save preferences:", e);
+                        }
+                    },
+                    
+                    saveHistory() { 
+                        try {
+                            localStorage.setItem(this.HISTORY_KEY, JSON.stringify(this.chats)); 
+                        } catch (e) {
+                            console.error("Failed to save history:", e);
+                        }
+                    },
 
                     registerEventListeners() {
-                        const safeListen = (id, event, handler) => { if (this.elements[id]) this.elements[id].addEventListener(event, handler); };
+                        const safeListen = (id, event, handler) => { 
+                            if (this.elements[id]) this.elements[id].addEventListener(event, handler); 
+                        };
+                        
                         safeListen('mobile-menu-btn', 'click', () => this.toggleSidebar());
                         safeListen('sidebar-close-btn', 'click', () => this.toggleSidebar(true));
                         safeListen('overlay', 'click', () => this.toggleSidebar(true));
@@ -228,13 +495,28 @@
                     renderChatHistory() {
                         const container = this.elements['chat-history'];
                         if (!container) return;
-                        container.innerHTML = this.chats.length === 0 ? `<p class="text-sm text-text-secondary text-center px-4 py-8">No chat history.</p>` : '';
+                        container.innerHTML = this.chats.length === 0 ? 
+                            `<p class="text-sm text-text-secondary text-center px-4 py-8">No chat history.</p>` : '';
+                            
                         this.chats.forEach(chat => {
                             const item = document.createElement('div');
                             item.className = `group relative p-2.5 rounded-lg cursor-pointer hover:bg-gray-ui transition-colors ${chat.id === this.currentChatId ? 'bg-gray-ui' : ''}`;
-                            item.innerHTML = `<p class="text-sm font-medium text-text-primary truncate pr-8">${this.escapeHtml(chat.title)}</p><button class="delete-chat-btn absolute right-2 top-1/2 -translate-y-1/2 w-7 h-7 rounded-md text-text-secondary hover:bg-gray-base hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"><i class="fas fa-trash-alt"></i></button>`;
-                            item.addEventListener('click', e => { if (!e.target.closest('.delete-chat-btn')) { this.loadChat(chat.id); this.toggleSidebar(true); } });
-                            item.querySelector('.delete-chat-btn').addEventListener('click', e => { e.stopPropagation(); this.deleteChat(chat.id); });
+                            item.innerHTML = `
+                                <p class="text-sm font-medium text-text-primary truncate pr-8">${this.escapeHtml(chat.title)}</p>
+                                <button class="delete-chat-btn absolute right-2 top-1/2 -translate-y-1/2 w-7 h-7 rounded-md text-text-secondary hover:bg-gray-base hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <i class="fas fa-trash-alt"></i>
+                                </button>
+                            `;
+                            item.addEventListener('click', e => { 
+                                if (!e.target.closest('.delete-chat-btn')) { 
+                                    this.loadChat(chat.id); 
+                                    this.toggleSidebar(true); 
+                                } 
+                            });
+                            item.querySelector('.delete-chat-btn').addEventListener('click', e => { 
+                                e.stopPropagation(); 
+                                this.deleteChat(chat.id); 
+                            });
                             container.appendChild(item);
                         });
                     },
@@ -249,7 +531,12 @@
                         if (this.elements['chat-box']) this.elements['chat-box'].classList.remove('hidden');
                     },
 
-                    autoResizeInput(el) { if(el) { el.style.height = 'auto'; el.style.height = `${el.scrollHeight}px`; } },
+                    autoResizeInput(el) { 
+                        if(el) { 
+                            el.style.height = 'auto'; 
+                            el.style.height = `${el.scrollHeight}px`; 
+                        } 
+                    },
 
                     startNewChat() {
                         this.currentChatId = null;
@@ -264,7 +551,8 @@
                         this.currentChatId = chatId;
                         this.elements['chat-box'].innerHTML = '';
                         chat.messages.forEach(msg => this.appendMessage(msg.role, msg.content));
-                        this.showChatScreen(); this.renderChatHistory();
+                        this.showChatScreen(); 
+                        this.renderChatHistory();
                     },
 
                     deleteChat(chatId) {
@@ -280,27 +568,63 @@
                         const input = this.elements['chat-input'];
                         const message = input.value.trim();
                         if (!message) return;
+                        
                         this.showChatScreen();
                         let chat = this.chats.find(c => c.id === this.currentChatId);
                         if (!chat) {
                             this.currentChatId = `chat_${Date.now()}`;
-                            chat = { id: this.currentChatId, title: message.substring(0, 40) + (message.length > 40 ? '...' : ''), messages: [] };
+                            chat = { 
+                                id: this.currentChatId, 
+                                title: message.substring(0, 40) + (message.length > 40 ? '...' : ''), 
+                                messages: [] 
+                            };
                             this.chats.unshift(chat);
                         }
                         chat.messages.push({ role: 'user', content: message });
                         this.appendMessage('user', message);
-                        this.saveHistory(); this.renderChatHistory();
-                        input.value = ''; this.autoResizeInput(input);
+                        this.saveHistory(); 
+                        this.renderChatHistory();
+                        input.value = ''; 
+                        this.autoResizeInput(input);
+                        
                         const loadingBubble = this.appendMessage('assistant', '...', true);
+                        
                         try {
-                            const response = await fetch(`${this.BACKEND_URL}/api/chat`, {
-                                method: 'POST', headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ message, provider: this.prefs.provider, personality: 'agent' })
-                            });
-                            if (!response.ok) throw new Error(`API Error: ${response.statusText}`);
-                            const data = await response.json();
-                            chat.messages.push({ role: 'assistant', content: data.response });
-                            this.updateMessage(loadingBubble, data.response);
+                            // Check connection if we haven't already
+                            if (this.currentBackend === null) {
+                                await this.checkConnection();
+                            }
+                            
+                            let response;
+                            if (this.isOnline && this.currentBackend) {
+                                response = await fetch(`${this.currentBackend}/api/chat`, {
+                                    method: 'POST', 
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ 
+                                        message, 
+                                        provider: this.prefs.provider, 
+                                        personality: 'agent' 
+                                    })
+                                });
+                                
+                                if (!response.ok) throw new Error(`API Error: ${response.statusText}`);
+                                const data = await response.json();
+                                chat.messages.push({ role: 'assistant', content: data.response });
+                                this.updateMessage(loadingBubble, data.response);
+                            } else {
+                                // Offline mode - use a simple local response
+                                const offlineResponses = [
+                                    "I'm currently experiencing connection issues. Please check your internet connection and try again.",
+                                    "I can't connect to the AI service right now. Please try again in a moment.",
+                                    "Network connection unavailable. I'll be back online as soon as the connection is restored.",
+                                    "It seems there's a connection problem. While I work to restore full functionality, is there anything else I can help with?"
+                                ];
+                                
+                                const offlineResponse = offlineResponses[Math.floor(Math.random() * offlineResponses.length)];
+                                chat.messages.push({ role: 'assistant', content: offlineResponse });
+                                this.updateMessage(loadingBubble, offlineResponse);
+                            }
+                            
                             this.saveHistory();
                         } catch (error) {
                             console.error("API call failed:", error);
@@ -308,6 +632,9 @@
                             this.updateMessage(loadingBubble, errorMessage);
                             chat.messages.push({ role: 'assistant', content: errorMessage });
                             this.saveHistory();
+                            
+                            // Try to reconnect
+                            setTimeout(() => this.checkConnection(), 3000);
                         }
                     },
                     
@@ -323,45 +650,149 @@
                     async handleVoiceInput() {
                         const voiceBtn = this.elements['voice-btn'];
                         if (!voiceBtn) return;
-                        if (this.isRecording) { this.mediaRecorder.stop(); return; }
-                        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { alert("Voice recording is not supported by your browser."); return; }
+                        
+                        if (this.isRecording) { 
+                            this.mediaRecorder.stop(); 
+                            return; 
+                        }
+                        
+                        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { 
+                            this.showToast("Voice recording is not supported by your browser.", "error");
+                            return; 
+                        }
+                        
                         try {
                             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
                             this.mediaRecorder = new MediaRecorder(stream);
                             this.audioChunks = [];
+                            
                             this.mediaRecorder.ondataavailable = event => this.audioChunks.push(event.data);
-                            this.mediaRecorder.onstart = () => { this.isRecording = true; voiceBtn.classList.add('text-red-500'); voiceBtn.innerHTML = '<i class="fas fa-stop text-lg"></i>'; };
+                            
+                            this.mediaRecorder.onstart = () => { 
+                                this.isRecording = true; 
+                                voiceBtn.classList.add('text-red-500'); 
+                                voiceBtn.innerHTML = '<i class="fas fa-stop text-lg"></i>'; 
+                                this.showToast("Recording... Click again to stop", "info");
+                            };
+                            
                             this.mediaRecorder.onstop = async () => {
-                                this.isRecording = false; voiceBtn.classList.remove('text-red-500'); voiceBtn.innerHTML = '<i class="fas fa-microphone text-lg"></i>';
+                                this.isRecording = false; 
+                                voiceBtn.classList.remove('text-red-500'); 
+                                voiceBtn.innerHTML = '<i class="fas fa-microphone text-lg"></i>';
                                 stream.getTracks().forEach(track => track.stop());
+                                
                                 const audioBlob = new Blob(this.audioChunks, { type: 'audio/webm' });
                                 const formData = new FormData();
                                 formData.append('file', audioBlob, 'recording.webm');
+                                
                                 this.showChatScreen();
                                 const loadingBubble = this.appendMessage('assistant', 'Transcribing...', true);
+                                
                                 try {
-                                    const response = await fetch(`${this.BACKEND_URL}/voice`, { method: 'POST', body: formData });
+                                    // Check connection
+                                    if (this.currentBackend === null) {
+                                        await this.checkConnection();
+                                    }
+                                    
+                                    if (!this.isOnline || !this.currentBackend) {
+                                        throw new Error("No connection to voice service");
+                                    }
+                                    
+                                    const response = await fetch(`${this.currentBackend}/voice`, { 
+                                        method: 'POST', 
+                                        body: formData 
+                                    });
+                                    
                                     if (!response.ok) throw new Error(`Server error: ${response.statusText}`);
                                     const data = await response.json();
+                                    
                                     this.updateMessage(loadingBubble, `You said: "${data.transcript}"`);
+                                    
                                     let chat = this.chats.find(c => c.id === this.currentChatId);
                                     if (!chat) {
                                         this.currentChatId = `chat_${Date.now()}`;
-                                        chat = { id: this.currentChatId, title: data.transcript.substring(0, 40), messages: [] };
+                                        chat = { 
+                                            id: this.currentChatId, 
+                                            title: data.transcript.substring(0, 40), 
+                                            messages: [] 
+                                        };
                                         this.chats.unshift(chat);
                                     }
+                                    
                                     chat.messages.push({ role: 'user', content: data.transcript });
                                     chat.messages.push({ role: 'assistant', content: data.response });
                                     this.appendMessage('assistant', data.response);
-                                    this.saveHistory(); this.renderChatHistory();
-                                } catch (error) { console.error("Voice processing failed:", error); this.updateMessage(loadingBubble, `Error processing audio: ${error.message}`); }
+                                    this.saveHistory(); 
+                                    this.renderChatHistory();
+                                    
+                                } catch (error) { 
+                                    console.error("Voice processing failed:", error); 
+                                    this.updateMessage(loadingBubble, `Error processing audio: ${error.message}`); 
+                                    
+                                    // Try to reconnect
+                                    setTimeout(() => this.checkConnection(), 3000);
+                                }
                             };
+                            
                             this.mediaRecorder.start();
-                        } catch (err) { console.error("Error accessing microphone:", err); alert("Could not access microphone. Please grant permission and try again."); }
+                        } catch (err) { 
+                            console.error("Error accessing microphone:", err); 
+                            this.showToast("Could not access microphone. Please grant permission and try again.", "error");
+                        }
+                    },
+                    
+                    showToast(message, type = "info") {
+                        // Remove any existing toasts
+                        const existingToasts = document.querySelectorAll('.quainex-toast');
+                        existingToasts.forEach(toast => toast.remove());
+                        
+                        const toast = document.createElement('div');
+                        toast.className = `quainex-toast fixed bottom-4 left-1/2 transform -translate-x-1/2 px-4 py-2 rounded-lg text-sm font-medium z-50 flex items-center space-x-2 transition-all duration-300`;
+                        
+                        // Style based on type
+                        if (type === "error") {
+                            toast.classList.add("bg-red-500", "text-white");
+                        } else if (type === "success") {
+                            toast.classList.add("bg-green-500", "text-white");
+                        } else {
+                            toast.classList.add("bg-gray-ui", "text-text-primary", "border", "border-border-color");
+                        }
+                        
+                        // Add icon based on type
+                        let icon = "info-circle";
+                        if (type === "error") icon = "exclamation-circle";
+                        if (type === "success") icon = "check-circle";
+                        
+                        toast.innerHTML = `
+                            <i class="fas fa-${icon}"></i>
+                            <span>${message}</span>
+                        `;
+                        
+                        document.body.appendChild(toast);
+                        
+                        // Animate in
+                        setTimeout(() => {
+                            toast.style.opacity = "1";
+                            toast.style.transform = "translate(-50%, 0)";
+                        }, 10);
+                        
+                        // Remove after 3 seconds
+                        setTimeout(() => {
+                            toast.style.opacity = "0";
+                            toast.style.transform = "translate(-50%, 10px)";
+                            setTimeout(() => {
+                                if (toast.parentNode) toast.parentNode.removeChild(toast);
+                            }, 300);
+                        }, 3000);
                     },
 
                     handleTTS(text, button) {
-                        if (speechSynthesis.speaking) { speechSynthesis.cancel(); button.innerHTML = '<i class="fas fa-volume-high"></i>'; return; }
+                        if (speechSynthesis.speaking) { 
+                            speechSynthesis.cancel(); 
+                            button.innerHTML = '<i class="fas fa-volume-high"></i>'; 
+                            return; 
+                        }
+                        
                         const utterance = new SpeechSynthesisUtterance(text);
                         utterance.onend = () => button.innerHTML = '<i class="fas fa-volume-high"></i>';
                         speechSynthesis.speak(utterance);
@@ -371,13 +802,25 @@
                     appendMessage(role, content, isLoading = false) {
                         const chatBox = this.elements['chat-box'];
                         if (!chatBox) return null;
+                        
                         const wrapper = document.createElement('div');
-                        wrapper.className = 'message-bubble-wrapper pop-in';
+                        wrapper.className = 'message-bubble-wrapper';
+                        
                         const bubble = document.createElement('div');
                         bubble.className = `max-w-3xl w-fit rounded-2xl px-5 py-3 shadow-lg ${role === 'user' ? 'bg-primary text-gray-base ml-auto rounded-br-none' : 'bg-gray-ui text-text-primary rounded-bl-none'}`;
+                        
                         if (isLoading) {
-                            bubble.innerHTML = `<div class="flex items-center space-x-1.5"><span class="w-2 h-2 bg-text-secondary rounded-full animate-pulse" style="animation-delay: 0s;"></span><span class="w-2 h-2 bg-text-secondary rounded-full animate-pulse" style="animation-delay: 0.2s;"></span><span class="w-2 h-2 bg-text-secondary rounded-full animate-pulse" style="animation-delay: 0.4s;"></span></div>`;
-                        } else { this.updateMessageContent(bubble, content, role); }
+                            bubble.innerHTML = `
+                                <div class="flex items-center">
+                                    <div class="typing-indicator">
+                                        <span></span><span></span><span></span>
+                                    </div>
+                                </div>
+                            `;
+                        } else { 
+                            this.updateMessageContent(bubble, content, role); 
+                        }
+                        
                         wrapper.appendChild(bubble);
                         chatBox.appendChild(wrapper);
                         chatBox.scrollTop = chatBox.scrollHeight;
@@ -394,45 +837,111 @@
                         const messageContent = document.createElement('div');
                         messageContent.className = 'message-content prose prose-invert max-w-none prose-p:my-2 prose-pre:my-2';
                         messageContent.innerHTML = marked.parse(content);
-                        element.innerHTML = ''; element.appendChild(messageContent);
+                        element.innerHTML = ''; 
+                        element.appendChild(messageContent);
+                        
                         if (role === 'assistant') {
                             const actions = document.createElement('div');
-                            actions.className = 'message-actions mt-2 pt-2 border-t border-border-color/50';
+                            actions.className = 'message-actions mt-2 pt-2 border-t border-border-color/50 flex items-center space-x-2';
+                            
                             const ttsButton = document.createElement('button');
-                            ttsButton.className = 'tts-btn w-7 h-7 rounded-full text-xs';
+                            ttsButton.className = 'tts-btn w-7 h-7 rounded-full text-xs flex items-center justify-center';
                             ttsButton.innerHTML = '<i class="fas fa-volume-high"></i>';
                             ttsButton.onclick = () => this.handleTTS(content, ttsButton);
                             actions.appendChild(ttsButton);
+                            
+                            const copyButton = document.createElement('button');
+                            copyButton.className = 'tts-btn w-7 h-7 rounded-full text-xs flex items-center justify-center';
+                            copyButton.innerHTML = '<i class="fas fa-copy"></i>';
+                            copyButton.onclick = () => {
+                                navigator.clipboard.writeText(content);
+                                copyButton.innerHTML = '<i class="fas fa-check"></i>';
+                                setTimeout(() => {
+                                    copyButton.innerHTML = '<i class="fas fa-copy"></i>';
+                                }, 2000);
+                            };
+                            actions.appendChild(copyButton);
+                            
                             element.appendChild(actions);
                         }
+                        
                         element.querySelectorAll('pre').forEach(pre => {
-                            const code = pre.querySelector('code'); if (!code) return;
+                            const code = pre.querySelector('code'); 
+                            if (!code) return;
+                            
                             const copyBtn = document.createElement('button');
-                            copyBtn.className = 'copy-code-btn'; copyBtn.innerHTML = '<i class="fas fa-copy"></i> Copy';
-                            copyBtn.addEventListener('click', () => { navigator.clipboard.writeText(code.innerText); copyBtn.innerHTML = '<i class="fas fa-check"></i> Copied!'; setTimeout(() => { copyBtn.innerHTML = '<i class="fas fa-copy"></i> Copy'; }, 2000); });
+                            copyBtn.className = 'copy-code-btn'; 
+                            copyBtn.innerHTML = '<i class="fas fa-copy"></i> Copy';
+                            copyBtn.addEventListener('click', () => { 
+                                navigator.clipboard.writeText(code.innerText); 
+                                copyBtn.innerHTML = '<i class="fas fa-check"></i> Copied!'; 
+                                setTimeout(() => { 
+                                    copyBtn.innerHTML = '<i class="fas fa-copy"></i> Copy'; 
+                                }, 2000); 
+                            });
                             pre.appendChild(copyBtn);
                         });
+                        
                         element.querySelectorAll('pre code').forEach(block => hljs.highlightElement(block));
                     },
 
                     renderSettingsModal() {
-                        const content = `<h2 class="text-xl font-bold mb-4">Settings</h2><div><label class="block text-sm mb-1 text-text-secondary">AI Provider</label><select id="settings-provider" class="w-full rounded px-3 py-2 bg-gray-ui border border-border-color"><option value="deepseek">BRILUX (Recommended)</option><option value="openrouter">OpenRouter</option><option value="groq">Groq</option></select></div><div class="flex justify-end mt-6"><button id="settings-save-btn" class="px-4 py-2 rounded bg-primary text-gray-base font-semibold">Save</button></div>`;
+                        const content = `
+                            <h2 class="text-xl font-bold mb-4">Settings</h2>
+                            <div>
+                                <label class="block text-sm mb-1 text-text-secondary">AI Provider</label>
+                                <select id="settings-provider" class="w-full rounded px-3 py-2 bg-gray-ui border border-border-color">
+                                    <option value="deepseek">BRILUX (Recommended)</option>
+                                    <option value="openrouter">OpenRouter</option>
+                                    <option value="groq">Groq</option>
+                                </select>
+                            </div>
+                            <div class="flex justify-end mt-6">
+                                <button id="settings-save-btn" class="px-4 py-2 rounded bg-primary text-gray-base font-semibold">Save</button>
+                            </div>
+                        `;
+                        
                         this.createModal(content);
+                        
                         const providerSelect = document.getElementById('settings-provider');
                         providerSelect.value = this.prefs.provider;
-                        document.getElementById('settings-save-btn').addEventListener('click', () => { this.prefs.provider = providerSelect.value; this.savePrefs(); this.closeModal(); });
+                        
+                        document.getElementById('settings-save-btn').addEventListener('click', () => { 
+                            this.prefs.provider = providerSelect.value;
+                            this.savePrefs(); 
+                            this.closeModal(); 
+                            this.showToast("Settings saved successfully", "success");
+                        });
                     },
 
                     createModal(contentHTML) {
-                        const modalContainer = this.elements['modal-container']; if (!modalContainer) return;
-                        modalContainer.innerHTML = `<div id="modal-backdrop" class="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-4 fade-in"><div class="modal-content w-full max-w-md p-6 rounded-xl pop-in"><button id="modal-close-btn" class="absolute top-4 right-4 text-text-secondary hover:text-text-primary">&times;</button>${contentHTML}</div></div>`;
+                        const modalContainer = this.elements['modal-container']; 
+                        if (!modalContainer) return;
+                        
+                        modalContainer.innerHTML = `
+                            <div id="modal-backdrop" class="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-4 fade-in">
+                                <div class="modal-content w-full max-w-md p-6 rounded-xl pop-in">
+                                    <button id="modal-close-btn" class="absolute top-4 right-4 text-text-secondary hover:text-text-primary">&times;</button>
+                                    ${contentHTML}
+                                </div>
+                            </div>
+                        `;
+                        
                         document.getElementById('modal-close-btn').addEventListener('click', () => this.closeModal());
-                        document.getElementById('modal-backdrop').addEventListener('click', e => { if (e.target.id === 'modal-backdrop') this.closeModal(); });
+                        document.getElementById('modal-backdrop').addEventListener('click', e => { 
+                            if (e.target.id === 'modal-backdrop') this.closeModal(); 
+                        });
                     },
 
-                    closeModal() { if (this.elements['modal-container']) this.elements['modal-container'].innerHTML = ''; },
-                    escapeHtml(str) { return str.replace(/[&<>"']/g, m => ({'&': '&amp;','<': '&lt;','>': '&gt;','"': '&quot;',"'": '&#039;'})[m]); }
+                    closeModal() { 
+                        if (this.elements['modal-container']) this.elements['modal-container'].innerHTML = ''; 
+                    },
+                    
+                    escapeHtml(str) { 
+                        return str.replace(/[&<>"']/g, m => ({'&': '&amp;','<': '&lt;','>': '&gt;','"': '&quot;',"'": '&#039;'})[m]); 
+                    }
                 };
+                
                 APP.init();
             });
         } catch (e) {
