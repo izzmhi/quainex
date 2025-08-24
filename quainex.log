@@ -3,3 +3,9 @@
 2025-08-10 22:20:36,434 - __main__ - ERROR - Startup cleanup failed: [Errno -3] Temporary failure in name resolution
 2025-08-19 13:01:51,546 - httpx - INFO - HTTP Request: DELETE https://ynozdqtrwsbunayrzgbd.supabase.co/rest/v1/chat_history?created_at=lt.2025-07-20T13%3A01%3A49.611006 "HTTP/2 200 OK"
 2025-08-19 13:01:51,567 - __main__ - INFO - Cleaned up 0 old chat records
+2025-08-24 18:32:26,294 - httpx - INFO - HTTP Request: DELETE https://ynozdqtrwsbunayrzgbd.supabase.co/rest/v1/chat_history?created_at=lt.2025-07-25T18%3A32%3A24.848817 "HTTP/2 200 OK"
+2025-08-24 18:32:26,305 - main - INFO - Cleaned up 0 old chat records
+2025-08-24 19:00:35,994 - httpx - INFO - HTTP Request: DELETE https://ynozdqtrwsbunayrzgbd.supabase.co/rest/v1/chat_history?created_at=lt.2025-07-25T19%3A00%3A24.478583 "HTTP/2 200 OK"
+2025-08-24 19:00:36,007 - main - INFO - Cleaned up 0 old chat records
+2025-08-24 19:02:07,051 - httpx - INFO - HTTP Request: DELETE https://ynozdqtrwsbunayrzgbd.supabase.co/rest/v1/chat_history?created_at=lt.2025-07-25T19%3A02%3A05.976485 "HTTP/2 200 OK"
+2025-08-24 19:02:07,061 - main - INFO - Cleaned up 0 old chat records
