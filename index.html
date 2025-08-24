@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Quainex AI | Advanced AI Assistant</title>
+    <title>Quainex AI</title>
     
     <!-- ICONS & FONTS -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
@@ -139,7 +139,7 @@
         font-size: 0.875rem;
         font-weight: 500;
         z-index: 100;
-        display: flex;
+        display: none; /* Add this line to hide the element */
         align-items: center;
         gap: 0.5rem;
         backdrop-filter: blur(10px);
@@ -314,8 +314,8 @@
         try {
             document.addEventListener('DOMContentLoaded', () => {
                 const APP = {
-                    BACKEND_URL: "https://quainex.space",
-                    BACKUP_URL: "https://quainexai.onrender.com",
+                    BACKEND_URL: "https://quainex.onrender.com",
+                    BACKUP_URL: "https://quainex.space",
                     PREFS_KEY: "quainex_prefs_nexus_v2",
                     HISTORY_KEY: "quainex_history_nexus_v2",
                     currentChatId: null, 
@@ -892,8 +892,8 @@
                                 <label class="block text-sm mb-1 text-text-secondary">AI Provider</label>
                                 <select id="settings-provider" class="w-full rounded px-3 py-2 bg-gray-ui border border-border-color">
                                     <option value="deepseek">BRILUX (Recommended)</option>
-                                    <option value="openrouter">OpenRouter</option>
-                                    <option value="groq">Groq</option>
+                                    <option value="openrouter">Quainex V1.0</option>
+                                    <option value="groq">Quainex v1.2</option>
                                 </select>
                             </div>
                             <div class="flex justify-end mt-6">
