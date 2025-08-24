@@ -218,7 +218,6 @@ class DeveloperAPIKey(BaseModel):
     company: Optional[str] = None
 
 # ---------- Core AI Components ----------
-# ---------- Tools Schema ----------
 TOOLS_SCHEMA = """
 <tools>
     <tool>
@@ -273,7 +272,6 @@ TOOLS_SCHEMA = """
 </tools>
 """
 
-# --- UPDATED: REASONING_PROMPT with identity and clean response instructions ---
 REASONING_PROMPT = f"""
 You are Quainex, an advanced AI assistant. You were built by Bright SecureTech, and its founder is Bright Quainoo.
 Your primary goal is to provide clear, accurate, and helpful responses.
@@ -665,7 +663,6 @@ class QuainexAgent:
                 logger.error(f"Malformed content was: {tool_match.group(1)}")
 
         # If a tool was not called, assume the whole response is the final answer.
-        # The cleaning of tags will happen in the main endpoint.
         if not result["tool_name"]:
             result["final_answer"] = response_text
         
@@ -690,7 +687,6 @@ class QuainexAgent:
             return f"<error>{error_msg}</error>"
 
 # ---------- API Endpoints ----------
-# --- UPDATED: The entire /api/chat endpoint to handle file uploads ---
 @app.post("/api/chat")
 async def chat_endpoint(
     message: str = Form(...),
@@ -699,22 +695,19 @@ async def chat_endpoint(
     conversation_id: Optional[str] = Form(None),
     file: Optional[UploadFile] = File(None)
 ):
-    """Main chat endpoint with memory and file upload support"""
+    """Main chat endpoint with memory and basic text file upload support."""
     try:
         start_time = datetime.now()
         logger.info(f"Received chat request. Personality: {personality}, ConvID: {conversation_id}, File: {file.filename if file else 'No'}")
 
         conv_id = conversation_id or "default"
         
-        # Process file and combine with message
         full_message = message
         if file:
             try:
-                # Read file content and decode as text
                 file_content = await file.read()
                 file_text = file_content.decode('utf-8')
                 
-                # Append file context to the user's message
                 full_message = (
                     f"{message}\n\n"
                     f"--- CONTEXT FROM FILE: {file.filename} ---\n"
@@ -815,10 +808,6 @@ async def voice_endpoint(file: UploadFile = File(...)):
             raise HTTPException(status_code=500, detail="Transcription failed to return text.")
 
         logger.info(f"Transcript: {transcript}")
-        
-        # --- Create a mock request object for the chat endpoint ---
-        # The chat endpoint now expects Form data, not a Pydantic model.
-        # We simulate this by directly calling the agent logic.
         
         conv_id = "voice_default" # Use a default or generate a conversation ID
         memory.add_message(conv_id, "user", transcript)
