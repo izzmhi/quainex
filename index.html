@@ -75,6 +75,14 @@
         padding: 0.25rem 0.5rem; border-radius: 0.375rem; font-size: 0.75rem; opacity: 0; transition: opacity 0.2s;
       }
       .message-content pre:hover .copy-code-btn { opacity: 1; }
+      
+      .tts-btn {
+          background-color: #21262d; color: #8b949e;
+          transition: all 0.2s;
+      }
+      .tts-btn:hover {
+          background-color: #30363d; color: #c9d1d9;
+      }
     </style>
 </head>
 <body class="h-screen flex flex-col text-text-primary overflow-hidden">
@@ -85,7 +93,6 @@
     <!-- ===== HEADER ===== -->
     <header class="flex-shrink-0 flex justify-between items-center p-3 border-b border-border-color z-30 bg-gray-base/80 backdrop-blur-sm">
         <div class="flex items-center space-x-3">
-            <!-- Mobile Menu Button -->
             <button id="mobile-menu-btn" class="p-2 rounded-md hover:bg-gray-ui transition-colors md:hidden">
                 <i class="fas fa-bars text-lg text-text-secondary"></i>
             </button>
@@ -134,6 +141,9 @@
                 <form id="chat-form" class="max-w-4xl mx-auto">
                     <div id="chat-form-container" class="flex items-end w-full p-2 rounded-2xl shadow-lg focus-within:border-primary transition-colors">
                         <textarea id="chat-input" rows="1" placeholder="Ask me anything..." class="w-full bg-transparent text-text-primary px-2 py-2.5 rounded-lg focus:outline-none resize-none placeholder-text-secondary"></textarea>
+                        <button type="button" id="voice-btn" class="flex-shrink-0 text-text-secondary hover:text-primary w-10 h-10 rounded-xl transition-all flex items-center justify-center ml-2">
+                            <i class="fas fa-microphone text-lg"></i>
+                        </button>
                         <button type="submit" class="flex-shrink-0 bg-primary hover:bg-primary-hover text-gray-base w-10 h-10 rounded-xl transition-all flex items-center justify-center ml-2">
                             <i class="fas fa-arrow-up text-lg"></i>
                         </button>
@@ -151,9 +161,10 @@
             document.addEventListener('DOMContentLoaded', () => {
                 const APP = {
                     BACKEND_URL: "https://quainex.space",
-                    PREFS_KEY: "quainex_prefs_nexus_v1",
-                    HISTORY_KEY: "quainex_history_nexus_v1",
+                    PREFS_KEY: "quainex_prefs_nexus_v2",
+                    HISTORY_KEY: "quainex_history_nexus_v2",
                     currentChatId: null, chats: [], prefs: { provider: "deepseek" }, elements: {},
+                    mediaRecorder: null, audioChunks: [], isRecording: false,
 
                     init() {
                         this.cacheDOMElements();
@@ -166,17 +177,13 @@
                     },
 
                     cacheDOMElements() {
-                        const ids = [ 'mobile-menu-btn', 'sidebar', 'overlay', 'chat-history', 'chat-screen', 'chat-box', 'welcome-screen', 'chat-form', 'chat-input', 'modal-container', 'settings-btn', 'new-chat-btn-header', 'error-display', 'sidebar-close-btn' ];
+                        const ids = [ 'mobile-menu-btn', 'sidebar', 'overlay', 'chat-history', 'chat-screen', 'chat-box', 'welcome-screen', 'chat-form', 'chat-input', 'modal-container', 'settings-btn', 'new-chat-btn-header', 'error-display', 'sidebar-close-btn', 'voice-btn' ];
                         ids.forEach(id => this.elements[id] = document.getElementById(id));
                     },
                     
                     initParticles() {
                         if (window.particlesJS) {
-                            particlesJS('particles-js', {
-                                "particles": { "number": { "value": 60, "density": { "enable": true, "value_area": 800 } }, "color": { "value": "#00dd93" }, "shape": { "type": "circle" }, "opacity": { "value": 0.3, "random": true }, "size": { "value": 3, "random": true }, "line_linked": { "enable": true, "distance": 150, "color": "#21262d", "opacity": 0.4, "width": 1 }, "move": { "enable": true, "speed": 1, "direction": "none", "out_mode": "out" } },
-                                "interactivity": { "detect_on": "canvas", "events": { "onhover": { "enable": true, "mode": "grab" }, "onclick": { "enable": false } }, "modes": { "grab": { "distance": 140, "line_linked": { "opacity": 1 } } } },
-                                "retina_detect": true
-                            });
+                            particlesJS('particles-js', { "particles": { "number": { "value": 60, "density": { "enable": true, "value_area": 800 } }, "color": { "value": "#00dd93" }, "shape": { "type": "circle" }, "opacity": { "value": 0.3, "random": true }, "size": { "value": 3, "random": true }, "line_linked": { "enable": true, "distance": 150, "color": "#21262d", "opacity": 0.4, "width": 1 }, "move": { "enable": true, "speed": 1, "direction": "none", "out_mode": "out" } }, "interactivity": { "detect_on": "canvas", "events": { "onhover": { "enable": true, "mode": "grab" }, "onclick": { "enable": false } }, "modes": { "grab": { "distance": 140, "line_linked": { "opacity": 1 } } } }, "retina_detect": true });
                         }
                     },
 
@@ -193,9 +200,7 @@
                     saveHistory() { localStorage.setItem(this.HISTORY_KEY, JSON.stringify(this.chats)); },
 
                     registerEventListeners() {
-                        const safeListen = (id, event, handler) => {
-                            if (this.elements[id]) this.elements[id].addEventListener(event, handler);
-                        };
+                        const safeListen = (id, event, handler) => { if (this.elements[id]) this.elements[id].addEventListener(event, handler); };
                         safeListen('mobile-menu-btn', 'click', () => this.toggleSidebar());
                         safeListen('sidebar-close-btn', 'click', () => this.toggleSidebar(true));
                         safeListen('overlay', 'click', () => this.toggleSidebar(true));
@@ -204,6 +209,7 @@
                         safeListen('chat-input', 'input', e => this.autoResizeInput(e.target));
                         safeListen('settings-btn', 'click', this.renderSettingsModal.bind(this));
                         safeListen('new-chat-btn-header', 'click', this.startNewChat.bind(this));
+                        safeListen('voice-btn', 'click', this.handleVoiceInput.bind(this));
                     },
 
                     toggleSidebar(forceClose = false) {
@@ -226,15 +232,8 @@
                         this.chats.forEach(chat => {
                             const item = document.createElement('div');
                             item.className = `group relative p-2.5 rounded-lg cursor-pointer hover:bg-gray-ui transition-colors ${chat.id === this.currentChatId ? 'bg-gray-ui' : ''}`;
-                            item.innerHTML = `<p class="text-sm font-medium text-text-primary truncate pr-8">${this.escapeHtml(chat.title)}</p>
-                                            <button class="delete-chat-btn absolute right-2 top-1/2 -translate-y-1/2 w-7 h-7 rounded-md text-text-secondary hover:bg-gray-base hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                <i class="fas fa-trash-alt"></i></button>`;
-                            item.addEventListener('click', e => {
-                                if (!e.target.closest('.delete-chat-btn')) {
-                                    this.loadChat(chat.id);
-                                    this.toggleSidebar(true); // Close sidebar on mobile after selection
-                                }
-                            });
+                            item.innerHTML = `<p class="text-sm font-medium text-text-primary truncate pr-8">${this.escapeHtml(chat.title)}</p><button class="delete-chat-btn absolute right-2 top-1/2 -translate-y-1/2 w-7 h-7 rounded-md text-text-secondary hover:bg-gray-base hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"><i class="fas fa-trash-alt"></i></button>`;
+                            item.addEventListener('click', e => { if (!e.target.closest('.delete-chat-btn')) { this.loadChat(chat.id); this.toggleSidebar(true); } });
                             item.querySelector('.delete-chat-btn').addEventListener('click', e => { e.stopPropagation(); this.deleteChat(chat.id); });
                             container.appendChild(item);
                         });
@@ -311,8 +310,54 @@
                             this.saveHistory();
                         }
                     },
+                    
+                    async handleVoiceInput() {
+                        const voiceBtn = this.elements['voice-btn'];
+                        if (!voiceBtn) return;
+                        if (this.isRecording) { this.mediaRecorder.stop(); return; }
+                        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { alert("Voice recording is not supported by your browser."); return; }
+                        try {
+                            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                            this.mediaRecorder = new MediaRecorder(stream);
+                            this.audioChunks = [];
+                            this.mediaRecorder.ondataavailable = event => this.audioChunks.push(event.data);
+                            this.mediaRecorder.onstart = () => { this.isRecording = true; voiceBtn.classList.add('text-red-500'); voiceBtn.innerHTML = '<i class="fas fa-stop text-lg"></i>'; };
+                            this.mediaRecorder.onstop = async () => {
+                                this.isRecording = false; voiceBtn.classList.remove('text-red-500'); voiceBtn.innerHTML = '<i class="fas fa-microphone text-lg"></i>';
+                                stream.getTracks().forEach(track => track.stop());
+                                const audioBlob = new Blob(this.audioChunks, { type: 'audio/webm' });
+                                const formData = new FormData();
+                                formData.append('file', audioBlob, 'recording.webm');
+                                this.showChatScreen();
+                                const loadingBubble = this.appendMessage('assistant', 'Transcribing...', true);
+                                try {
+                                    const response = await fetch(`${this.BACKEND_URL}/voice`, { method: 'POST', body: formData });
+                                    if (!response.ok) throw new Error(`Server error: ${response.statusText}`);
+                                    const data = await response.json();
+                                    this.updateMessage(loadingBubble, `You said: "${data.transcript}"`);
+                                    let chat = this.chats.find(c => c.id === this.currentChatId);
+                                    if (!chat) {
+                                        this.currentChatId = `chat_${Date.now()}`;
+                                        chat = { id: this.currentChatId, title: data.transcript.substring(0, 40), messages: [] };
+                                        this.chats.unshift(chat);
+                                    }
+                                    chat.messages.push({ role: 'user', content: data.transcript });
+                                    chat.messages.push({ role: 'assistant', content: data.response });
+                                    this.appendMessage('assistant', data.response);
+                                    this.saveHistory(); this.renderChatHistory();
+                                } catch (error) { console.error("Voice processing failed:", error); this.updateMessage(loadingBubble, `Error processing audio: ${error.message}`); }
+                            };
+                            this.mediaRecorder.start();
+                        } catch (err) { console.error("Error accessing microphone:", err); alert("Could not access microphone. Please grant permission and try again."); }
+                    },
 
-                    handleKeyPress(e) { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); this.elements['chat-form'].requestSubmit(); } },
+                    handleTTS(text, button) {
+                        if (speechSynthesis.speaking) { speechSynthesis.cancel(); button.innerHTML = '<i class="fas fa-volume-high"></i>'; return; }
+                        const utterance = new SpeechSynthesisUtterance(text);
+                        utterance.onend = () => button.innerHTML = '<i class="fas fa-volume-high"></i>';
+                        speechSynthesis.speak(utterance);
+                        button.innerHTML = '<i class="fas fa-stop"></i>';
+                    },
 
                     appendMessage(role, content, isLoading = false) {
                         const chatBox = this.elements['chat-box'];
@@ -323,7 +368,7 @@
                         bubble.className = `max-w-3xl w-fit rounded-2xl px-5 py-3 shadow-lg ${role === 'user' ? 'bg-primary text-gray-base ml-auto rounded-br-none' : 'bg-gray-ui text-text-primary rounded-bl-none'}`;
                         if (isLoading) {
                             bubble.innerHTML = `<div class="flex items-center space-x-1.5"><span class="w-2 h-2 bg-text-secondary rounded-full animate-pulse" style="animation-delay: 0s;"></span><span class="w-2 h-2 bg-text-secondary rounded-full animate-pulse" style="animation-delay: 0.2s;"></span><span class="w-2 h-2 bg-text-secondary rounded-full animate-pulse" style="animation-delay: 0.4s;"></span></div>`;
-                        } else { this.updateMessageContent(bubble, content); }
+                        } else { this.updateMessageContent(bubble, content, role); }
                         wrapper.appendChild(bubble);
                         chatBox.appendChild(wrapper);
                         chatBox.scrollTop = chatBox.scrollHeight;
@@ -332,47 +377,46 @@
 
                     updateMessage(bubble, newContent) {
                         if (!bubble) return;
-                        this.updateMessageContent(bubble, newContent);
+                        this.updateMessageContent(bubble, newContent, 'assistant');
                         if (this.elements['chat-box']) this.elements['chat-box'].scrollTop = this.elements['chat-box'].scrollHeight;
                     },
 
-                    updateMessageContent(element, content) {
-                        element.innerHTML = `<div class="message-content prose prose-invert max-w-none prose-p:my-2 prose-pre:my-2">${marked.parse(content)}</div>`;
+                    updateMessageContent(element, content, role) {
+                        const messageContent = document.createElement('div');
+                        messageContent.className = 'message-content prose prose-invert max-w-none prose-p:my-2 prose-pre:my-2';
+                        messageContent.innerHTML = marked.parse(content);
+                        element.innerHTML = ''; element.appendChild(messageContent);
+                        if (role === 'assistant') {
+                            const actions = document.createElement('div');
+                            actions.className = 'message-actions mt-2 pt-2 border-t border-border-color/50';
+                            const ttsButton = document.createElement('button');
+                            ttsButton.className = 'tts-btn w-7 h-7 rounded-full text-xs';
+                            ttsButton.innerHTML = '<i class="fas fa-volume-high"></i>';
+                            ttsButton.onclick = () => this.handleTTS(content, ttsButton);
+                            actions.appendChild(ttsButton);
+                            element.appendChild(actions);
+                        }
                         element.querySelectorAll('pre').forEach(pre => {
                             const code = pre.querySelector('code'); if (!code) return;
                             const copyBtn = document.createElement('button');
                             copyBtn.className = 'copy-code-btn'; copyBtn.innerHTML = '<i class="fas fa-copy"></i> Copy';
-                            copyBtn.addEventListener('click', () => {
-                                navigator.clipboard.writeText(code.innerText);
-                                copyBtn.innerHTML = '<i class="fas fa-check"></i> Copied!';
-                                setTimeout(() => { copyBtn.innerHTML = '<i class="fas fa-copy"></i> Copy'; }, 2000);
-                            });
+                            copyBtn.addEventListener('click', () => { navigator.clipboard.writeText(code.innerText); copyBtn.innerHTML = '<i class="fas fa-check"></i> Copied!'; setTimeout(() => { copyBtn.innerHTML = '<i class="fas fa-copy"></i> Copy'; }, 2000); });
                             pre.appendChild(copyBtn);
                         });
                         element.querySelectorAll('pre code').forEach(block => hljs.highlightElement(block));
                     },
 
                     renderSettingsModal() {
-                        const content = `<h2 class="text-xl font-bold mb-4">Settings</h2>
-                                        <div><label class="block text-sm mb-1 text-text-secondary">AI Provider</label>
-                                        <select id="settings-provider" class="w-full rounded px-3 py-2 bg-gray-ui border border-border-color">
-                                            <option value="deepseek">BRILUX (Recommended)</option><option value="openrouter">OpenRouter</option><option value="groq">Groq</option>
-                                        </select></div>
-                                        <div class="flex justify-end mt-6"><button id="settings-save-btn" class="px-4 py-2 rounded bg-primary text-gray-base font-semibold">Save</button></div>`;
+                        const content = `<h2 class="text-xl font-bold mb-4">Settings</h2><div><label class="block text-sm mb-1 text-text-secondary">AI Provider</label><select id="settings-provider" class="w-full rounded px-3 py-2 bg-gray-ui border border-border-color"><option value="deepseek">BRILUX (Recommended)</option><option value="openrouter">OpenRouter</option><option value="groq">Groq</option></select></div><div class="flex justify-end mt-6"><button id="settings-save-btn" class="px-4 py-2 rounded bg-primary text-gray-base font-semibold">Save</button></div>`;
                         this.createModal(content);
                         const providerSelect = document.getElementById('settings-provider');
                         providerSelect.value = this.prefs.provider;
-                        document.getElementById('settings-save-btn').addEventListener('click', () => {
-                            this.prefs.provider = providerSelect.value; this.savePrefs(); this.closeModal();
-                        });
+                        document.getElementById('settings-save-btn').addEventListener('click', () => { this.prefs.provider = providerSelect.value; this.savePrefs(); this.closeModal(); });
                     },
 
                     createModal(contentHTML) {
                         const modalContainer = this.elements['modal-container']; if (!modalContainer) return;
-                        modalContainer.innerHTML = `<div id="modal-backdrop" class="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-4 fade-in">
-                                                    <div class="modal-content w-full max-w-md p-6 rounded-xl pop-in">
-                                                        <button id="modal-close-btn" class="absolute top-4 right-4 text-text-secondary hover:text-text-primary">&times;</button>
-                                                        ${contentHTML}</div></div>`;
+                        modalContainer.innerHTML = `<div id="modal-backdrop" class="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-4 fade-in"><div class="modal-content w-full max-w-md p-6 rounded-xl pop-in"><button id="modal-close-btn" class="absolute top-4 right-4 text-text-secondary hover:text-text-primary">&times;</button>${contentHTML}</div></div>`;
                         document.getElementById('modal-close-btn').addEventListener('click', () => this.closeModal());
                         document.getElementById('modal-backdrop').addEventListener('click', e => { if (e.target.id === 'modal-backdrop') this.closeModal(); });
                     },

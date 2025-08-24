@@ -76,10 +76,11 @@ supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 # Enhanced CORS configuration
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-         "https://quainex.space",
+     allow_origins=[
+        "https://quainex.space", # <-- YOUR NEW DOMAIN
         "https://quainexai.onrender.com",
-        "https://quainex.onrender.com"
+        "https://quainex.onrender.com",
+        "http://localhost:3000" # For local development
     ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -87,6 +88,7 @@ app.add_middleware(
     expose_headers=["*"],
     max_age=600
 )
+
 # ---------------- NEWS FUNCTIONS ----------------
 def get_latest_world_news():
     if not API_KEYS.get("newsapi"):
