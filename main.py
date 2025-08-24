@@ -21,10 +21,6 @@ from quainexmemory import MemoryManager
 import requests
 import io
 import uvicorn
-import fitz  # PyMuPDF
-import docx  # python-docx
-import pytesseract
-from PIL import Image
 
 # Initialize MemoryManager
 memory = MemoryManager(limit=10)
@@ -221,6 +217,7 @@ class DeveloperAPIKey(BaseModel):
     email: str
     company: Optional[str] = None
 
+# ---------- Core AI Components ----------
 # ---------- Tools Schema ----------
 TOOLS_SCHEMA = """
 <tools>
