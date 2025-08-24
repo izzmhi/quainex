@@ -204,12 +204,12 @@
                         safeListen('mobile-menu-btn', 'click', () => this.toggleSidebar());
                         safeListen('sidebar-close-btn', 'click', () => this.toggleSidebar(true));
                         safeListen('overlay', 'click', () => this.toggleSidebar(true));
-                        safeListen('chat-form', 'submit', this.handleFormSubmit.bind(this));
-                        safeListen('chat-input', 'keydown', this.handleKeyPress.bind(this));
+                        safeListen('chat-form', 'submit', (e) => this.handleFormSubmit(e));
+                        safeListen('chat-input', 'keydown', (e) => this.handleKeyPress(e));
                         safeListen('chat-input', 'input', e => this.autoResizeInput(e.target));
-                        safeListen('settings-btn', 'click', this.renderSettingsModal.bind(this));
-                        safeListen('new-chat-btn-header', 'click', this.startNewChat.bind(this));
-                        safeListen('voice-btn', 'click', this.handleVoiceInput.bind(this));
+                        safeListen('settings-btn', 'click', () => this.renderSettingsModal());
+                        safeListen('new-chat-btn-header', 'click', () => this.startNewChat());
+                        safeListen('voice-btn', 'click', () => this.handleVoiceInput());
                     },
 
                     toggleSidebar(forceClose = false) {
@@ -311,6 +311,15 @@
                         }
                     },
                     
+                    handleKeyPress(e) {
+                        if (e.key === 'Enter' && !e.shiftKey) {
+                            e.preventDefault();
+                            if (this.elements['chat-form']) {
+                                this.elements['chat-form'].requestSubmit();
+                            }
+                        }
+                    },
+
                     async handleVoiceInput() {
                         const voiceBtn = this.elements['voice-btn'];
                         if (!voiceBtn) return;
