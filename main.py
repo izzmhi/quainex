@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Request, HTTPException, status, Response, UploadFile, File, Form
+from fastapi import FastAPI, Request, HTTPException, status, Response, UploadFile, File, Body, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
@@ -21,8 +21,6 @@ from quainexmemory import MemoryManager
 import requests
 import io
 import uvicorn
-
-# --- New Imports for File Processing ---
 import fitz  # PyMuPDF
 import docx  # python-docx
 import pytesseract
@@ -223,7 +221,7 @@ class DeveloperAPIKey(BaseModel):
     email: str
     company: Optional[str] = None
 
-# ---------- Core AI Components ----------
+# ---------- Tools Schema ----------
 TOOLS_SCHEMA = """
 <tools>
     <tool>
@@ -278,6 +276,7 @@ TOOLS_SCHEMA = """
 </tools>
 """
 
+# --- UPDATED: REASONING_PROMPT with identity and clean response instructions ---
 REASONING_PROMPT = f"""
 You are Quainex, an advanced AI assistant. You were built by Bright SecureTech, and its founder is Bright Quainoo.
 Your primary goal is to provide clear, accurate, and helpful responses.
@@ -491,7 +490,8 @@ async def execute_web_search(query: str) -> str:
 async def execute_python_code(code: str) -> str:
     """
     Safely execute Python code.
-    NOTE: This sandbox is basic. For production, use a more secure solution.
+    NOTE: This sandbox is basic. For production, use a more secure solution 
+    like Docker containers or a dedicated sandboxing library.
     """
     blocked_keywords = [
         'import', 'open', 'os', 'sys', 'subprocess', 
@@ -504,6 +504,7 @@ async def execute_python_code(code: str) -> str:
     try:
         output_capture = io.StringIO()
         
+        # Create a safe execution environment
         safe_globals = {
             '__builtins__': {
                 'print': lambda *args, **kwargs: print(*args, file=output_capture, **kwargs),
@@ -553,8 +554,10 @@ async def execute_world_time(location: str) -> str:
     """Gets the current time for a specified location using WorldTimeAPI."""
     try:
         async with httpx.AsyncClient(timeout=15) as client:
+            # First, try to find a timezone for the location
             response = await client.get(f"http://worldtimeapi.org/api/timezone/{location}")
             
+            # If that fails, it might be an area, try to auto-detect
             if response.status_code != 200:
                  response = await client.get(f"http://worldtimeapi.org/api/ip") # Fallback to IP
                  if response.status_code != 200:
@@ -567,6 +570,7 @@ async def execute_world_time(location: str) -> str:
             if not datetime_str or not timezone:
                 return "Error: Invalid response from time API."
 
+            # Parse the datetime string and format it nicely
             dt_object = datetime.fromisoformat(datetime_str)
             formatted_time = dt_object.strftime('%A, %B %d, %Y, %I:%M:%S %p')
             
@@ -583,58 +587,6 @@ TOOL_REGISTRY = {
     "generate_image": execute_image_generation,
     "world_time": execute_world_time
 }
-
-# ---------- NEW: Universal File Processor ----------
-async def process_uploaded_file(file: UploadFile) -> str:
-    """
-    Identifies file type and extracts text content accordingly.
-    """
-    content_type = file.content_type
-    file_content = await file.read()
-    
-    # --- Handle PDF files ---
-    if content_type == "application/pdf":
-        try:
-            doc = fitz.open(stream=io.BytesIO(file_content))
-            text = ""
-            for page in doc:
-                text += page.get_text()
-            return text if text else "[System note: The PDF is empty or contains only images.]"
-        except Exception as e:
-            logger.error(f"Failed to process PDF {file.filename}: {e}")
-            return f"[System note: The PDF file '{file.filename}' could not be processed.]"
-
-    # --- Handle Word documents (.docx) ---
-    elif content_type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
-        try:
-            doc = docx.Document(io.BytesIO(file_content))
-            text = "\n".join([para.text for para in doc.paragraphs])
-            return text
-        except Exception as e:
-            logger.error(f"Failed to process DOCX {file.filename}: {e}")
-            return f"[System note: The Word document '{file.filename}' could not be processed.]"
-
-    # --- Handle Images (JPG, PNG) using OCR ---
-    elif content_type.startswith("image/"):
-        try:
-            image = Image.open(io.BytesIO(file_content))
-            text = pytesseract.image_to_string(image)
-            return text if text else "[System note: No text was found in the image.]"
-        except Exception as e:
-            logger.error(f"Failed to process Image {file.filename} with OCR: {e}")
-            return f"[System note: The image file '{file.filename}' could not be processed with OCR.]"
-
-    # --- Handle Plain Text files (fallback) ---
-    elif content_type.startswith("text/"):
-        try:
-            return file_content.decode('utf-8')
-        except UnicodeDecodeError:
-            return f"[System note: The text file '{file.filename}' has an unsupported encoding.]"
-            
-    # --- Unsupported file types ---
-    else:
-        logger.warning(f"Unsupported file type uploaded: {file.filename} ({content_type})")
-        return f"[System note: The file type '{content_type}' is not supported for content analysis.]"
 
 # ---------- Agent Implementation ----------
 class QuainexAgent:
@@ -703,6 +655,7 @@ class QuainexAgent:
                 else: 
                     return result 
 
+                # Using regex for simpler parsing of parameters
                 params_match = re.search(r'<parameters>(.*?)</parameters>', tool_xml_string, re.DOTALL)
                 if params_match:
                     params_str = params_match.group(1)
@@ -714,6 +667,8 @@ class QuainexAgent:
                 logger.error(f"Failed to parse tool call: {str(e)}")
                 logger.error(f"Malformed content was: {tool_match.group(1)}")
 
+        # If a tool was not called, assume the whole response is the final answer.
+        # The cleaning of tags will happen in the main endpoint.
         if not result["tool_name"]:
             result["final_answer"] = response_text
         
@@ -738,6 +693,7 @@ class QuainexAgent:
             return f"<error>{error_msg}</error>"
 
 # ---------- API Endpoints ----------
+# --- UPDATED: The entire /api/chat endpoint to handle file uploads ---
 @app.post("/api/chat")
 async def chat_endpoint(
     message: str = Form(...),
@@ -746,23 +702,32 @@ async def chat_endpoint(
     conversation_id: Optional[str] = Form(None),
     file: Optional[UploadFile] = File(None)
 ):
-    """Main chat endpoint with memory and advanced file processing support."""
+    """Main chat endpoint with memory and file upload support"""
     try:
         start_time = datetime.now()
         logger.info(f"Received chat request. Personality: {personality}, ConvID: {conversation_id}, File: {file.filename if file else 'No'}")
 
         conv_id = conversation_id or "default"
         
+        # Process file and combine with message
         full_message = message
         if file:
-            file_text = await process_uploaded_file(file)
-            full_message = (
-                f"{message}\n\n"
-                f"--- CONTEXT FROM FILE: {file.filename} ---\n"
-                f"{file_text}\n"
-                f"--- END OF FILE CONTEXT ---"
-            )
-            logger.info(f"Processed file {file.filename} of type {file.content_type}")
+            try:
+                # Read file content and decode as text
+                file_content = await file.read()
+                file_text = file_content.decode('utf-8')
+                
+                # Append file context to the user's message
+                full_message = (
+                    f"{message}\n\n"
+                    f"--- CONTEXT FROM FILE: {file.filename} ---\n"
+                    f"{file_text}\n"
+                    f"--- END OF FILE CONTEXT ---"
+                )
+                logger.info(f"Appended content from file: {file.filename}")
+            except Exception as e:
+                logger.error(f"Could not read or decode file {file.filename}: {e}")
+                full_message = f"{message}\n\n[System note: A file named '{file.filename}' was uploaded but could not be read.]"
 
         memory.add_message(conv_id, "user", full_message)
 
@@ -779,6 +744,7 @@ async def chat_endpoint(
             response_text = result["response"]
             provider = result.get("provider", provider)
 
+        # Final cleaning of the AI response to remove any leftover tags
         response_text = re.sub(r'<thinking>.*?</thinking>', '', response_text, flags=re.DOTALL).strip()
         response_text = re.sub(r'<tool_call>.*?</tool_call>', '', response_text, flags=re.DOTALL).strip()
         
@@ -828,8 +794,13 @@ async def voice_endpoint(file: UploadFile = File(...)):
 
     logger.info("Received voice transcription request")
     try:
+        # Create a dictionary for the files part of the multipart/form-data
         files = { "file": (file.filename, await file.read(), file.content_type) }
+        
+        # Create a dictionary for the data part
         payload = { "model": "whisper-large-v3" }
+        
+        # Set the authorization header
         headers = { "Authorization": f"Bearer {API_KEYS['groq']}" }
 
         async with httpx.AsyncClient(timeout=60) as client:
@@ -848,12 +819,17 @@ async def voice_endpoint(file: UploadFile = File(...)):
 
         logger.info(f"Transcript: {transcript}")
         
-        conv_id = "voice_default"
+        # --- Create a mock request object for the chat endpoint ---
+        # The chat endpoint now expects Form data, not a Pydantic model.
+        # We simulate this by directly calling the agent logic.
+        
+        conv_id = "voice_default" # Use a default or generate a conversation ID
         memory.add_message(conv_id, "user", transcript)
         history = memory.get_history(conv_id)
         agent = QuainexAgent(provider="groq")
         chat_response_text = await agent.run(transcript, history=history)
         
+        # Final cleaning
         chat_response_text = re.sub(r'<thinking>.*?</thinking>', '', chat_response_text, flags=re.DOTALL).strip()
         chat_response_text = re.sub(r'<tool_call>.*?</tool_call>', '', chat_response_text, flags=re.DOTALL).strip()
         memory.add_message(conv_id, "assistant", chat_response_text)

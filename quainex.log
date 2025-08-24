@@ -9,3 +9,7 @@
 2025-08-24 19:00:36,007 - main - INFO - Cleaned up 0 old chat records
 2025-08-24 19:02:07,051 - httpx - INFO - HTTP Request: DELETE https://ynozdqtrwsbunayrzgbd.supabase.co/rest/v1/chat_history?created_at=lt.2025-07-25T19%3A02%3A05.976485 "HTTP/2 200 OK"
 2025-08-24 19:02:07,061 - main - INFO - Cleaned up 0 old chat records
+2025-08-24 22:33:08,151 - httpx - INFO - HTTP Request: DELETE https://ynozdqtrwsbunayrzgbd.supabase.co/rest/v1/chat_history?created_at=lt.2025-07-25T22%3A33%3A06.750103 "HTTP/2 200 OK"
+2025-08-24 22:33:08,156 - main - INFO - Cleaned up 0 old chat records
+2025-08-24 22:35:28,946 - httpx - INFO - HTTP Request: DELETE https://ynozdqtrwsbunayrzgbd.supabase.co/rest/v1/chat_history?created_at=lt.2025-07-25T22%3A35%3A27.750752 "HTTP/2 200 OK"
+2025-08-24 22:35:28,955 - main - INFO - Cleaned up 0 old chat records
